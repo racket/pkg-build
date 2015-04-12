@@ -762,7 +762,7 @@
                               read))
             (for/and ([pkg (in-list new-pkgs)])
               (or (member pkg flat-pkgs)
-                  (set-member? installed-pkgs pkg)
+                  (set-member? snapshot-pkgs pkg)
                   (file-exists? (build-path built-catalog-dir "pkg" pkg))
                   (complain failure-dest
                             (~a "use of package not previously built: ~s;\n"
