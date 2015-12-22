@@ -1195,7 +1195,8 @@
       (for ([a (in-list (hash-ref install-adds-pkgs pkg))]
             #:when (eq? 'doc (car a)))
         (define doc (cdr a))
-        (make-file-or-directory-link doc (build-path doc-dir (~a doc "@" pkg)))))
+        (when (directory-exists? (build-path doc-dir doc))
+          (make-file-or-directory-link doc (build-path doc-dir (~a doc "@" pkg))))))
 
     ;; Add documentation for conflicting packages, and add links for
     ;; each package:
@@ -1207,7 +1208,8 @@
        [(set-member? no-conflict-doc-pkgs pkg)
         ;; Create a link for fully installed documentation:
         (for ([doc (in-list docs)])
-          (make-file-or-directory-link doc (build-path doc-dir (~a doc "@" pkg))))]
+          (when (directory-exists? (build-path doc-dir doc))
+            (make-file-or-directory-link doc (build-path doc-dir (~a doc "@" pkg)))))]
        [else
         ;; Extract successfully built but not fully installed documentation:
         (substatus "Trying to extract ~s docs\n" pkg)
