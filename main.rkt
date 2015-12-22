@@ -1316,14 +1316,19 @@
                                      (path->relative (build-path min-fail-dir (txt pkg))))
                'docs (for/list ([doc (in-list docs)])
                        (define path (~a "doc/" (~a doc "@" pkg) "/index.html"))
+                       (define (ok?) (directory-exists? (build-path doc-dir (~a doc "@" pkg)))) 
                        (if (or (not (eq? status 'success))
                                conflicts?)
-                           (if (directory-exists? (build-path doc-dir (~a doc "@" pkg)))
+                           (if (ok?)
                                (if (set-member? available-pkgs pkg)
                                    (doc/extract doc path)
                                    (doc/salvage doc path))
                                (doc/none doc))
-                           (doc/main doc path)))
+                           (if (ok?)
+                               (doc/main doc path)
+                               ;; Something went wrong with the doc, such as an ill-formed
+                               ;; `scribblings` entry, despite the appearance of success
+                               (doc/none doc))))
                'author (pkg-author pkg)
                'conflicts-log (and conflicts?
                                    (if (set-member? conflict-pkgs pkg)
