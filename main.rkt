@@ -467,8 +467,9 @@
 
   (define snapshot-pkgs (list->set snapshot-pkg-names))
   (define installed-pkgs (list->set installed-pkg-names))
+  (define all-pkgs (list->set all-pkg-names))
 
-  (define try-pkgs (set-subtract (list->set all-pkg-names)
+  (define try-pkgs (set-subtract all-pkgs
                                  installed-pkgs))
 
   (define (pkg-checksum pkg) (hash-ref (hash-ref pkg-details pkg) 'checksum ""))
@@ -520,7 +521,8 @@
          (for/set ([pkg (in-set try-pkgs)]
                    #:when (and (not (set-member? update-pkgs pkg))
                                (for/or ([dep (in-list (pkg-deps pkg))])
-                                 (set-member? update-pkgs dep))))
+                                 (or (set-member? update-pkgs dep)
+                                     (not (set-member? all-pkgs dep))))))
            pkg))
        (if (set-empty? more-pkgs)
            update-pkgs
