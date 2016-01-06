@@ -21,9 +21,9 @@
 
 (define (summary-page summary-ht dest-dir)
   (define page-site (site "pkg-build"
-                          #:url "http://pkg-build.racket-lang.org/"
+                          #:url "https://pkg-build.racket-lang.org/"
                           #:share-from (site "www"
-                                             #:url "http://racket-lang.org/"
+                                             #:url "https://racket-lang.org/"
                                              #:generate? #f)
                           #:navigation (list
                                         (lambda () (force about-page)))))

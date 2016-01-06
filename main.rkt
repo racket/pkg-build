@@ -196,7 +196,7 @@
          #:vms vms
 
          ;; Catalogs of packages to build (via an archive):
-         #:pkg-catalogs [pkg-catalogs (list "http://pkgs.racket-lang.org/")]
+         #:pkg-catalogs [pkg-catalogs (list "https://pkgs.racket-lang.org/")]
 
          ;; The Racket version to use in queries to archived catalogs;
          ;; this version should be consistent with `snapshot-url`.

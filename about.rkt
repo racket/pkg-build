@@ -23,7 +23,7 @@
               @here{@h3[page-title]
 
                     @p{For every package that is registered at
-@literal-url{http://pkgs.racket-lang.org/}, the package-build service
+@literal-url{https://pkgs.racket-lang.org/}, the package-build service
 starts with the current release, periodically checks for package
 updates, and attempts to build each package that has changed or has a
 dependency that has changed.}
@@ -51,7 +51,7 @@ form.}
                     @p{The package-build service does not support
 references to @a[href: "http://planet.racket-lang.org"]{PLaneT
 packages} or to compatibility packages at
-@literal-url{http://planet-compats.racket-lang.org/}. When a package
+@literal-url{https://planet-compats.racket-lang.org/}. When a package
 depends on one of those, then the package installation fails, because
 package builds are performed on a VM without network
 connectivity.}
@@ -107,7 +107,7 @@ causes the test to time out.}
                     @p{to make @tt{raco test} ignore the enclosing
 module. You can control @tt{raco test} in various other ways through
 submodules and @tt{"info.rkt"} files@";" see
-@a[href: "http://docs.racket-lang.org/raco/test.html"]{the
+@a[href: "https://docs.racket-lang.org/raco/test.html"]{the
 documentation}.}
 
                     @p{The default timeout on an individual test is 90 seconds, and the
