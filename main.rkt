@@ -630,15 +630,15 @@
       (for/fold ([all old-all]) ([pkg (in-list pkgs)]
                                  [ht (in-list hts)])
         (hash-set all pkg ht)))
-    (call-with-output-file*
+    ;; Update full package lists atomically, in case a build is trying
+    ;; to read one of them:
+    (call-with-atomic-output-file
      (build-path built-catalog-dir "pkgs-all")
-     #:exists 'truncate/replace
      (lambda (o)
        (write all o)
        (newline o)))
-    (call-with-output-file*
+    (call-with-atomic-output-file
      (build-path built-catalog-dir "pkgs")
-     #:exists 'truncate/replace
      (lambda (o)
        (write (hash-keys all) o)
        (newline o))))
@@ -668,6 +668,8 @@
 
   (make-directory* dumpster-pkgs-dir)
   (make-directory* dumpster-adds-dir)
+
+  (define catalog-lock (make-semaphore 1))
 
   (define (pkg-adds-file pkg)
     (build-path built-dir "adds" (format "~a-adds.rktd" pkg)))
@@ -833,7 +835,10 @@
                   (fprintf o "success~a\n" deps-msg)
                   (fprintf o "success with ~s~a\n" pkgs deps-msg))))
            (save-checksum pkg))
-         (update-built-catalog flat-pkgs)]
+         (call-with-semaphore
+          catalog-lock
+          (lambda ()
+            (update-built-catalog flat-pkgs)))]
         [else
          (when one-pkg
            ;; Record failure (for all docs in a mutually dependent set):
