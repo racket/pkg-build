@@ -634,12 +634,12 @@
     ;; to read one of them:
     (call-with-atomic-output-file
      (build-path built-catalog-dir "pkgs-all")
-     (lambda (o)
+     (lambda (o tmp-path)
        (write all o)
        (newline o)))
     (call-with-atomic-output-file
      (build-path built-catalog-dir "pkgs")
-     (lambda (o)
+     (lambda (o tmp-path)
        (write (hash-keys all) o)
        (newline o))))
 
@@ -1107,9 +1107,7 @@
                               [(d) (in-list v)])
           (hash-update ht d (lambda (l) (set-add l k)) (set))))
       (define providers (add-providers (add-providers (hash) adds-pkgs)
-                                       (call-with-input-file*
-                                        (build-path work-dir "install-adds.rktd")
-                                        read)))
+                                       install-adds-pkgs))
       (define conflicts
         (for/list ([(k v) (in-hash providers)]
                    #:when ((set-count v) . > . 1))
