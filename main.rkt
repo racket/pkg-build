@@ -1219,7 +1219,7 @@
         ;; Extract successfully built but not fully installed documentation:
         (substatus "Trying to extract ~s docs\n" pkg)
         (with-handlers ([exn:fail? (lambda (exn)
-                                     (eprintf "~a\n" (exn-message exn)))])
+                                     (eprintf "Extract error: ~a\n" (exn-message exn)))])
           (extract-documentation (pkg-zip-file pkg) pkg doc-dir))]))
 
     ;; Add salvageable docs from the dumpster, and fall back as a last resort
@@ -1239,7 +1239,7 @@
                           adds))
           (substatus "Trying to salvage ~s docs\n" pkg)
           (with-handlers ([exn:fail? (lambda (exn)
-                                       (eprintf "~a\n" (exn-message exn)))])
+                                       (eprintf "Salvage error: ~a\n" (exn-message exn)))])
             (extract-documentation zip-file pkg doc-dir))
           (for ([f (in-list (hash-ref prev-docs pkg null))])
             (unless (directory-exists? (build-path doc-dir f))
