@@ -132,6 +132,8 @@
          ;;   "installer/" --- holds installer downloaded
          ;;     from the snapshot site
          ;;
+         ;;   "install-uuids.rktd" --- mapping of machine names to UUIDs
+         ;;     of prepared VM snapshots
          ;;   "install-list.rktd" --- list of packages found in
          ;;     the installation
          ;;   "install-adds.rktd" --- table of docs, libs, etc.
@@ -214,8 +216,16 @@
          ;; you can skip tests at the end if you don't want them:
          #:steps [steps (steps-in 'download 'summary)]
          
+         ;; If non-#f, save a list of files in the original
+         ;; installation's "doc" directory to the specified file
+         ;; as part of the 'install step:
+         #:install-doc-list-file [install-doc-list-file #f]
+
          ;; Run tests?
          #:run-tests? [run-tests? #t]
+
+         ;; Include built packages in the site?
+         #:built-at-site? [built-at-site? #f]
 
          ;; Omit specified packages from the summary:
          #:summary-omit-pkgs [summary-omit-pkgs null]
@@ -332,7 +342,10 @@
   ;; ----------------------------------------
   (unless skip-download?
     (status "Downloading installer ~a\n" installer-name)
-    (download-installer snapshot-url installer-dir installer-name substatus))
+    (download-installer snapshot-url installer-dir installer-name substatus
+                        (lambda ()
+                          (when (file-exists? "install-uuids.rktd")
+                            (delete-file "install-uuids.rktd")))))
 
   ;; ----------------------------------------
   (unless skip-archive?
@@ -447,12 +460,46 @@
       (delete-vbox-snapshot (vm-name vm) (vm-installed-snapshot vm)))
     (take-vbox-snapshot (vm-name vm) (vm-installed-snapshot vm)))
 
+  (define (check-and-install vm #:one-time? [one-time? #f])
+    (define uuids (with-handlers ([exn:fail? (lambda (exn)
+                                               (hash))])
+                    (define ht
+                      (call-with-input-file*
+                       "install-uuids.rktd"
+                       read))
+                    (if (hash? ht)
+                        ht
+                        (hash))))
+    (define key (list (vm-name vm) (vm-installed-snapshot vm)))
+    (define uuid (hash-ref uuids key #f))
+    (cond
+     [(equal? uuid (get-vbox-snapshot-uuid (vm-name vm) (vm-installed-snapshot vm)))
+      (status "VM ~a is up-to-date for ~a\n" (vm-name vm) (vm-installed-snapshot vm))]
+     [else
+      (install vm #:one-time? one-time?)
+      (define uuid (get-vbox-snapshot-uuid (vm-name vm) (vm-installed-snapshot vm)))
+      (call-with-output-file*
+       "install-uuids.rktd"
+       #:exists 'truncate
+       (lambda (o)
+         (writeln (hash-set uuids key uuid) o)))]))
+
   (unless skip-install?
     (for ([vm (in-list vms)]
           [i (in-naturals)])
-      (install vm #:one-time? (zero? i))
+      (check-and-install vm #:one-time? (zero? i))
       (when (vm-minimal-variant vm)
-        (install (vm-minimal-variant vm)))))
+        (check-and-install (vm-minimal-variant vm))))
+
+    (when install-doc-list-file
+      (call-with-output-file*
+       install-doc-list-file
+       #:exists 'truncate
+       (lambda (o)
+         (untgz (build-path work-dir "install-doc.tgz")
+                #:filter (lambda (p . _)
+                           (displayln p o)
+                           #f))))))
   
   ;; ----------------------------------------
   (status "Resetting ready content of ~a\n" built-pkgs-dir)
@@ -1368,8 +1415,8 @@
     (define (wpath . a) (apply build-path work-dir a))
     (define skip-paths (set (wpath "installer")
                             (wpath "server" "archive")
-                            (wpath "server" "built" "catalog")
-                            (wpath "server" "built" "pkgs")
+                            (and (not built-at-site?) (wpath "server" "built" "catalog"))
+                            (and (not built-at-site?) (wpath "server" "built" "pkgs"))
                             (wpath "server" "built" "adds")
                             (wpath "dumpster")
                             (wpath "table.rktd")

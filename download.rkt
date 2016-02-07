@@ -7,7 +7,7 @@
 
 (provide download-installer)
 
-(define (download-installer snapshot-url installer-dir installer-name substatus)
+(define (download-installer snapshot-url installer-dir installer-name substatus on-download)
   (define status-file (build-path installer-dir "status.rktd"))
   (define name+etag (and (file-exists? status-file)
                          (call-with-input-file*
@@ -32,6 +32,7 @@
          (equal? (cadr name+etag) etag))
     (substatus "Using cached installer, Etag ~a\n" etag)]
    [else
+    (on-download)
     (delete-directory/files installer-dir #:must-exist? #f)
     (make-directory* installer-dir)
     (call/input-url
