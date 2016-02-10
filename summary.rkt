@@ -24,14 +24,18 @@
                       #:built-at-site? [built-at-site? #f]
                       #:site-url [site-url #f]
                       #:site-starting-point [site-starting-point #f])
-  (define page-site (site "pkg-build"
+  (define site-name "pkg-build")
+  (define page-site (site site-name
                           #:url (or site-url "https://pkg-build.racket-lang.org/")
                           #:share-from (site "www"
                                              #:url "https://racket-lang.org/"
                                              #:generate? #f)
                           #:navigation (list
                                         (lambda () (force about-page)))))
-  (define about-page (delay (make-about page-site
+  (define about-site (site site-name
+                           #:share-from page-site
+                           #:meta? #f))
+  (define about-page (delay (make-about about-site
                                         #:pkg-catalogs pkg-catalogs
                                         #:site-starting-point site-starting-point
                                         #:built-at-site? built-at-site?
