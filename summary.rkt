@@ -27,6 +27,7 @@
   (define site-name "pkg-build")
   (define page-site (site site-name
                           #:url (or site-url "https://pkg-build.racket-lang.org/")
+                          #:always-abs-url? #f
                           #:share-from (site "www"
                                              #:url "https://racket-lang.org/"
                                              #:generate? #f)
@@ -34,6 +35,7 @@
                                         (lambda () (force about-page)))))
   (define about-site (site site-name
                            #:share-from page-site
+                           #:always-abs-url? #f
                            #:meta? #f))
   (define about-page (delay (make-about about-site
                                         #:pkg-catalogs pkg-catalogs
