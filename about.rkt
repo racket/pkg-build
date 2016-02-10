@@ -129,7 +129,7 @@ Libraries} below for information on implementing packages that rely on
 additional native libraries.}
 
                     @; ----------------------------------------
-                    @h3[name: "test"]{Dealing Test Failures}
+                    @h3[name: "test"]{Dealing with Test Failures}
 
                     @p{In the absence of any @tt{"info.rkt"}-based
 specifications or @tt{test} submodules, @tt{raco test} runs each
