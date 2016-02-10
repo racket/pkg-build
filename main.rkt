@@ -224,8 +224,16 @@
          ;; Run tests?
          #:run-tests? [run-tests? #t]
 
-         ;; Include built packages in the site?
+         ;; Include catalog of built packages in the site?
          #:built-at-site? [built-at-site? #f]
+
+         ;; The URL where the site will be made available,
+         ;; (for, e.g., showing help about the catalog):
+         #:site-url [site-url #f]
+
+         ;; Text for help to describes the starting point, where #f
+         ;; means "the current release":
+         #:site-starting-point [site-starting-point #f]
 
          ;; Omit specified packages from the summary:
          #:summary-omit-pkgs [summary-omit-pkgs null]
@@ -1404,7 +1412,11 @@
        (write full-summary-ht o)
        (newline o)))
 
-    (summary-page summary-ht work-dir))
+    (summary-page summary-ht work-dir
+                  #:pkg-catalogs pkg-catalogs
+                  #:built-at-site? built-at-site?
+                  #:site-starting-point site-starting-point
+                  #:site-url site-url))
 
   ;; ----------------------------------------
 

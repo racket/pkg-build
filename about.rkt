@@ -1,6 +1,8 @@
 #lang at-exp racket/base
 (require scribble/html
+         racket/list
          plt-web
+         net/url-string
          (only-in plt-web/style columns))
 
 (provide make-about)
@@ -11,10 +13,19 @@
 (define (hx . c)
   @h5{@b[c]})
 
-(define (make-about page-site)
+(define (make-about page-site
+                    #:pkg-catalogs [pkg-catalogs (list "https://pkgs.racket-lang.org/")]
+                    #:built-at-site? [built-at-site? #f]
+                    #:site-url [site-url #f]
+                    #:site-starting-point [given-starting-point #f])
   (define page-title "About Package Builds")
-  (define (literal-url s)
-    @a[href: s s])
+  (define starting-point
+    (or given-starting-point
+        @span{the @a[href: "https://download.racket-lang.org/"]{current release}}))
+  (define catalog-url (if site-url
+                          (url->string (combine-url/relative (string->url site-url)
+                                                             "server/built/catalog/"))
+                          "server/built/catalog/"))
   (page #:site page-site
         #:file "about.html"
         #:title page-title
@@ -23,8 +34,8 @@
               @here{@h3[page-title]
 
                     @p{For every package that is registered at
-@literal-url{https://pkgs.racket-lang.org/}, the package-build service
-starts with the current release, periodically checks for package
+@format-catalogs[pkg-catalogs], the package-build service
+starts with @starting-point, periodically checks for package
 updates, and attempts to build each package that has changed or has a
 dependency that has changed.}
 
@@ -42,6 +53,35 @@ packages are re-packaged in built form for use by other
 packages. Testing of a package starts with a fresh instance of the
 virtual machine and a fresh installation of the package from its built
 form.}
+
+                    @; ----------------------------------------
+
+                    @(if built-at-site?
+                         @list{@h3{Built-Package Catalog}
+
+                               @p{The package-build service archives the most recently built
+                                  form of each package and makes it available
+                                  through a package catalog at}
+
+                               @pre{  @catalog-url}
+
+                               @p{}
+
+                               @p{Built packages can install much faster than the
+                                  original source packages, as long as you're
+                                  using @starting-point (i.e., the same version of Racket as the package-build service).
+                                  Use the built-package catalog by supplying the above URL with
+                                  @tt{raco pkg install --catalog}
+                                  or by adding the URL to the start of your Racket installation's list of catalogs.}
+
+                               @p{Another advantage of a built-package catalog is that it's compatible
+                                  with @|ldquo|binary library@|rdquo| install mode, as selected with
+                                  the @tt{--binary-lib} flag to @tt{raco pkg install}. In that mode, sources and
+                                  documentation are stripped away from the package as it is installed, and
+                                  dependencies that are needed only
+                                  for compilation or building documentation are not downloaded at all.}}
+
+                         null)
 
                     @; ----------------------------------------
                     @h3{Limitations}
@@ -98,7 +138,7 @@ it@|rsquo|s a program-starting module that expects command-line
 arguments, or a module might start a program that expects input and
 causes the test to time out.}
 
-                    @p{In the simplest case, you can add a `test` submodule as}
+                    @p{In the simplest case, you can add a @tt{test} submodule as}
 
                     @pre{  (module test racket/base)}
 
@@ -157,7 +197,7 @@ platform, the @tt{"math-lib"} package depends on the
 builds of GMP and MPFR. You can see that dependency declaration in the
 @tt{"info.rkt"} file for the @tt{"math-lib"} package:}
 
-                    @pre{  @literal-url{https://github.com/plt/racket/blob/master/pkgs/math-pkgs/math-lib/info.rkt}}
+                    @pre{  @literal-url{https://github.com/racket/math/blob/master/math-lib/info.rkt}}
 
                     @p{}
 
@@ -189,3 +229,24 @@ users and for testing@|mdash|especially if Windows and Mac OS X
 native-library packages are also provided@|mdash|but it@|rsquo|s more work.}
 
                     })))
+
+;; ----------------------------------------
+
+(define (literal-url s)
+  @a[href: s s])
+
+(define (format-catalogs pkg-catalogs)
+  (cond
+   [(= 1 (length pkg-catalogs))
+    @literal-url{@(car pkg-catalogs)}]
+   [(= 2 (length pkg-catalogs))
+    @span{@(format-catalogs (list (car pkg-catalogs)))
+          and
+          @(format-catalogs (list (cadr pkg-catalogs)))}]
+   [else
+    (append
+     (add-between (for/list ([p (drop-right pkg-catalogs 1)])
+                    (format-catalogs (list p)))
+                  ", ")
+     (list ", and "
+           (format-catalogs (list (last pkg-catalogs)))))]))

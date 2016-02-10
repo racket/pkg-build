@@ -19,15 +19,23 @@
 
 (struct conflicts/indirect (path) #:prefab)
 
-(define (summary-page summary-ht dest-dir)
+(define (summary-page summary-ht dest-dir
+                      #:pkg-catalogs [pkg-catalogs (list "https://pkgs.racket-lang.org/")]
+                      #:built-at-site? [built-at-site? #f]
+                      #:site-url [site-url #f]
+                      #:site-starting-point [site-starting-point #f])
   (define page-site (site "pkg-build"
-                          #:url "https://pkg-build.racket-lang.org/"
+                          #:url (or site-url "https://pkg-build.racket-lang.org/")
                           #:share-from (site "www"
                                              #:url "https://racket-lang.org/"
                                              #:generate? #f)
                           #:navigation (list
                                         (lambda () (force about-page)))))
-  (define about-page (delay (make-about page-site)))
+  (define about-page (delay (make-about page-site
+                                        #:pkg-catalogs pkg-catalogs
+                                        #:site-starting-point site-starting-point
+                                        #:built-at-site? built-at-site?
+                                        #:site-url site-url)))
 
   (define page-title "Package Build Results")
 
