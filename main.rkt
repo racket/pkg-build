@@ -558,7 +558,7 @@
                 (and (file-exists? checksum-file)
                      (equal? checksum (file->string checksum-file))
                      (or (set-member? installed-pkgs pkg)
-                         (file-exists? (pkg-failure-dest pkg))
+                         (set-member? failed-pkgs pkg)
                          (and
                           (file-exists? (pkg-zip-file pkg))
                           (file-exists? (pkg-zip-checksum-file pkg)))))))
@@ -577,6 +577,10 @@
                    #:when (and (not (set-member? update-pkgs pkg))
                                (for/or ([dep (in-list (pkg-deps pkg))])
                                  (or (set-member? update-pkgs dep)
+                                     ;; This condition will cause trying any package
+                                     ;; whose dependency is missing every time, since
+                                     ;; we haven't tracked which packages were missing
+                                     ;; before:
                                      (not (set-member? all-pkgs dep))))))
            pkg))
        (if (set-empty? more-pkgs)
@@ -609,8 +613,7 @@
      (lambda (o)
        (write-string (pkg-checksum pkg) o))))
 
-  (define need-pkgs (set-subtract (set-subtract update-pkgs installed-pkgs)
-                                  failed-pkgs))
+  (define need-pkgs (set-subtract update-pkgs installed-pkgs))
 
   (define cycles (make-hash)) ; for union-find
 
@@ -1102,7 +1105,8 @@
                 error?)])])))
 
   ;; Build all of the out-of-date packages:
-  (unless skip-build?
+  (unless (or skip-build?
+              (null? need-pkgs-list))
     (if (= 1 (length vms))
         ;; Sequential builds:
         (build-pkg-set (car vms) need-pkgs-list)
