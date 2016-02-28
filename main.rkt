@@ -144,6 +144,13 @@
          ;;     packages, taken from the snapshot site plus additional
          ;;     specified catalogs
          ;;
+         ;;   "all-pkgs.rktd" --- list of available package at most
+         ;;     recent build, to avoid re-building packages that will
+         ;;     fail again due to missing dependencies
+         ;;   "force-pkgs.rktd" --- list of packages to force a
+         ;;     rebuild; this file is an input, and it is deleted
+         ;;     after it is used
+         ;;
          ;;   "server/built" --- built packages
          ;;     For a package P:
          ;;      * "pkgs/P.orig-CHECKSUM" matching archived catalog
@@ -517,12 +524,36 @@
   (define installed-pkg-names
     (call-with-input-file* (build-path work-dir "install-list.rktd") read))
 
+  (define (read-optional-file fn)
+    (define p (build-path work-dir fn))
+    (define r
+      (and (file-exists? fn)
+           (with-handlers ([exn:fail? (lambda (exn)
+                                        (log-error "~s" (exn-message exn))
+                                        #f)])
+             (call-with-input-file* p read))))
+    (if (and (list? r)
+             (andmap string? r))
+        r
+        null))
+
+  (define previous-all-pkg-names
+    (read-optional-file "all-pkgs.rktd"))
+  (define force-pkg-names
+    (read-optional-file "force-pkgs.rktd"))
+
   (substatus "Total number of packages: ~a\n" (length all-pkg-names))
   (substatus "Packages installed already: ~a\n" (length installed-pkg-names))
 
   (define snapshot-pkgs (list->set snapshot-pkg-names))
   (define installed-pkgs (list->set installed-pkg-names))
   (define all-pkgs (list->set all-pkg-names))
+
+  (define package-set-changed?
+    (not (equal? all-pkgs
+		 (list->set previous-all-pkg-names))))
+  (when package-set-changed?
+    (substatus "Set of available packages has changed\n"))
 
   (define try-pkgs (set-subtract all-pkgs
                                  installed-pkgs))
@@ -550,22 +581,26 @@
       pkg))
 
   (define changed-pkgs
-    (for/set ([pkg (in-list all-pkg-names)]
-              #:unless
-              (let ()
-                (define checksum (pkg-checksum pkg))
-                (define checksum-file (pkg-checksum-file pkg))
-                (and (file-exists? checksum-file)
-                     (equal? checksum (file->string checksum-file))
-                     (or (set-member? installed-pkgs pkg)
-                         (set-member? failed-pkgs pkg)
-                         (and
-                          (file-exists? (pkg-zip-file pkg))
-                          (file-exists? (pkg-zip-checksum-file pkg)))))))
-      pkg))
+    (set-union
+     (for/set ([pkg (in-list all-pkg-names)]
+	       #:unless
+	       (let ()
+		 (define checksum (pkg-checksum pkg))
+		 (define checksum-file (pkg-checksum-file pkg))
+		 (and (file-exists? checksum-file)
+		      (equal? checksum (file->string checksum-file))
+		      (or (set-member? installed-pkgs pkg)
+			  (set-member? failed-pkgs pkg)
+			  (and
+			   (file-exists? (pkg-zip-file pkg))
+			   (file-exists? (pkg-zip-checksum-file pkg)))))))
+        pkg)
+     (for/set ([pkg (in-list force-pkg-names)]
+	       #:when (set-member? all-pkgs pkg))
+       pkg)))
 
   (define (pkg-deps pkg)
-    (map (lambda (dep) 
+    (map (lambda (dep)
            (define d (if (string? dep) dep (car dep)))
            (if (equal? d "racket") "base" d))
          (hash-ref (hash-ref pkg-details pkg) 'dependencies null)))
@@ -576,12 +611,9 @@
          (for/set ([pkg (in-set try-pkgs)]
                    #:when (and (not (set-member? update-pkgs pkg))
                                (for/or ([dep (in-list (pkg-deps pkg))])
-                                 (or (set-member? update-pkgs dep)
-                                     ;; This condition will cause trying any package
-                                     ;; whose dependency is missing every time, since
-                                     ;; we haven't tracked which packages were missing
-                                     ;; before:
-                                     (not (set-member? all-pkgs dep))))))
+				 (or (set-member? update-pkgs dep)
+				     (and package-set-changed?
+					  (not (set-member? all-pkgs dep)))))))
            pkg))
        (if (set-empty? more-pkgs)
            update-pkgs
@@ -612,6 +644,18 @@
      #:exists 'truncate/replace
      (lambda (o)
        (write-string (pkg-checksum pkg) o))))
+
+  ;; Remove "force-pkgs.rktd", if any:
+  (when (file-exists? (build-path work-dir "force-pkgs.rktd"))
+    (delete-file (build-path work-dir "force-pkgs.rktd")))
+
+  ;; Save set of available packages, so we can detect changes on
+  ;; the test run:
+  (call-with-atomic-output-file
+   (build-path work-dir "all-pkgs.rktd")
+   (lambda (o tmp-path)
+     (write all-pkg-names o)
+     (newline o)))
 
   (define need-pkgs (set-subtract update-pkgs installed-pkgs))
 
