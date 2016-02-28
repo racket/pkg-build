@@ -167,6 +167,7 @@
          ;;         + fail/P.txt
          ;;        => up-to-date and failed;
          ;;           "install/P.txt" may record installation success
+         ;;      * archive-fail/P.txt => archiving failure
          ;;
          ;;   "dumpster/" --- saved builds of failed packages if the
          ;;     package at least installs; maybe the attempt built
@@ -290,6 +291,7 @@
   (define deps-fail-dir (build-path built-dir "deps"))
   (define test-success-dir (build-path built-dir "test-success"))
   (define test-fail-dir (build-path built-dir "test-fail"))
+  (define archive-fail-dir (build-path built-dir "archive-fail"))
 
   (define dumpster-dir (build-path work-dir "dumpster"))
   (define dumpster-pkgs-dir (build-path dumpster-dir "pkgs/"))
@@ -297,6 +299,12 @@
 
   (define doc-dir (build-path work-dir "doc"))
 
+  (define rx:txt #rx"[.]txt$")
+  (define (txt? f)
+    (regexp-match? rx:txt f))
+  (define (txt->name f)
+    (define-values (base name dir?) (split-path f))
+    (regexp-replace rx:txt (path-element->string name) ""))
   (define (txt s) (~a s ".txt"))
 
   (define snapshot-catalog
@@ -363,19 +371,40 @@
                             (delete-file "install-uuids.rktd")))))
 
   ;; ----------------------------------------
+
   (unless skip-archive?
     (status "Archiving packages from\n")
     (show-list (cons snapshot-catalog pkg-catalogs))
     (make-directory* archive-dir)
+    (define archive-failures (make-hash))
     (parameterize ([current-pkg-lookup-version pkgs-for-version])
       (pkg-catalog-archive archive-dir
                            (cons snapshot-catalog pkg-catalogs)
                            #:state-catalog state-file
                            #:relative-sources? #t
                            #:package-exn-handler (lambda (name exn)
+                                                   (hash-set! archive-failures
+                                                              name
+                                                              (exn-message exn))
                                                    (log-error "~a\nSKIPPING ~a"
                                                               (exn-message exn)
-                                                              name)))))
+                                                              name))))
+    ;; Clean and record archiving failures:
+    (make-directory* archive-fail-dir)
+    (parameterize ([current-directory (build-path archive-fail-dir)])
+      ;; Remove no-longer failing:
+      (for ([f (in-list (directory-list))])
+        (when (txt? f)
+          (unless (hash-ref archive-failures (txt->name f) #f)
+            (delete-file f))))
+      ;; Add current failing:
+      (for ([(k v) (in-hash archive-failures)])
+        (call-with-output-file*
+	 (txt k)
+	 #:exists 'truncate
+	 (lambda (o)
+	   (write-string v o)
+	   (newline o))))))
 
   (define snapshot-pkg-names
     (parameterize ([current-pkg-catalogs (list (string->url snapshot-catalog))])
@@ -565,6 +594,7 @@
   (define (pkg-zip-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".zip.CHECKSUM")))
   (define (pkg-failure-dest pkg #:minimal? [min? #f])
     (build-path (if min? min-fail-dir fail-dir) (txt pkg)))
+  (define (pkg-archive-failure-dest pkg) (build-path archive-fail-dir (txt pkg)))
   (define (pkg-test-success-dest pkg) (build-path test-success-dir (txt pkg)))
   (define (pkg-test-failure-dest pkg) (build-path test-fail-dir (txt pkg)))
 
@@ -1369,11 +1399,18 @@
       (unless (equal? work (take dest (length work)))
         (error "not relative"))
       (string-join (map path->string (drop dest (length work))) "/"))
-    
+
+    (define archive-fail-pkgs
+      (parameterize ([current-directory (build-path archive-fail-dir)])
+        (for/set ([f (in-list (directory-list))]
+                  #:when (txt? f))
+          (txt->name f))))
+
     (define summary-ht
-      (for/hash ([pkg (in-set (set-subtract try-pkgs
+      (for/hash ([pkg (in-set (set-subtract (set-union try-pkgs archive-fail-pkgs)
                                             (list->set summary-omit-pkgs)))])
-        (define failed? (file-exists? (pkg-failure-dest pkg)))
+        (define failed? (or (file-exists? (pkg-archive-failure-dest pkg))
+                            (file-exists? (pkg-failure-dest pkg))))
         (define succeeded? (file-exists? (build-path install-success-dir (txt pkg))))
         (define status
           (cond
@@ -1413,7 +1450,9 @@
                                  (path->relative (build-path install-success-dir (txt pkg))))
                'failure-log (and (or (eq? status 'failure)
                                      (eq? status 'confusion))
-                                 (path->relative (pkg-failure-dest pkg)))
+                                 (path->relative (if (file-exists? (pkg-archive-failure-dest pkg))
+                                                     (pkg-archive-failure-dest pkg)
+                                                     (pkg-failure-dest pkg))))
                'dep-failure-log (and (eq? dep-status 'failure)
                                      (path->relative (build-path deps-fail-dir (txt pkg))))
                'test-success-log (and (eq? test-status 'success)
