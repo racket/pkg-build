@@ -12,7 +12,13 @@
   (define temp-dir (make-temporary-file "docs~a" 'directory))
   (parameterize ([current-directory temp-dir])
     (unzip zip))
-  (for ([d (in-directory temp-dir)])
+  (define pkg-i (get-info/full temp-dir
+                               #:namespace (make-base-namespace)
+                               #:bootstrap? #t))
+  (for ([d (if (and pkg-i
+                    (eq? (pkg-i 'collection (lambda () #f)) 'multi))
+               (in-directory temp-dir)
+               (list temp-dir))])
     (cond
      [(directory-exists? d)
       (define i (get-info/full d
