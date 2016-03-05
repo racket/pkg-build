@@ -891,11 +891,10 @@
             (ssh #:show-time? #t
                  rt (cd-racket vm)
                  " && bin/racket ../pkg-list.rkt --user > ../user-list.rktd")
-            (scp rt (at-vm vm (~a there-dir "/user-list.rktd"))
-                 (build-path work-dir "user-list.rktd"))
-            (define new-pkgs (call-with-input-file*
-                              (build-path work-dir "user-list.rktd")
-                              read))
+            (define temp-file (make-temporary-file "user-list~a.rktd"))
+            (scp rt (at-vm vm (~a there-dir "/user-list.rktd")) temp-file)
+            (define new-pkgs (call-with-input-file* temp-file read))
+            (delete-file temp-file)
             (for/and ([pkg (in-list new-pkgs)])
               (or (member pkg flat-pkgs)
                   (set-member? snapshot-pkgs pkg)
@@ -1523,7 +1522,6 @@
                             (wpath "all-doc.tgz")
                             (wpath "install-doc.tgz")
                             (wpath "install-adds.rktd")
-                            (wpath "user-list.rktd")
                             (wpath "prev-doc")
                             (wpath "old-prev-doc")
                             (wpath "doc" "docindex.sqlite")
