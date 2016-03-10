@@ -348,7 +348,7 @@
     (define table (call/input-url
                    (combine-url/relative (string->url snapshot-url)
                                          "installers/table.rktd")
-                   get-pure-port
+                   (λ args (apply get-pure-port #:redirections 5 args))
                    (lambda (i) (read i))))
     (call-with-output-file*
      installer-table-path
