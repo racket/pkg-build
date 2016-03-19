@@ -1432,10 +1432,11 @@
         (define adds (let ([adds-file (if (eq? status 'success)
                                           (pkg-adds-file pkg)
                                           (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg)))])
-                       (if (file-exists? adds-file)
-                           (hash-ref (call-with-input-file* adds-file read)
-                                     pkg
-                                     null)
+                       (define adds-content
+                         (with-handlers ([exn:fail:read? (λ (x) #f)])
+                           (call-with-input-file* adds-file read)))
+                       (if (hash? adds-content)
+                           (hash-ref adds-content pkg null)
                            null)))
         (define conflicts? (and (eq? status 'success)
                                 (not (set-member? no-conflict-pkgs pkg))))
