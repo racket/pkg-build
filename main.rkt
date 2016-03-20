@@ -1433,8 +1433,10 @@
                                           (pkg-adds-file pkg)
                                           (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg)))])
                        (define adds-content
-                         (with-handlers ([exn:fail:read? (λ (x) #f)])
-                           (call-with-input-file* adds-file read)))
+                         (if (file-exists? adds-file)
+                             (with-handlers ([exn:fail:read? (λ (x) #f)])
+                               (call-with-input-file* adds-file read))
+                             #f))
                        (if (hash? adds-content)
                            (hash-ref adds-content pkg null)
                            null)))
