@@ -330,7 +330,13 @@
             #:env (append
                    (vm-env vm)
                    (list (cons "PLTUSERHOME"
-                               (~a (vm-dir vm) "/user"))))
+                               (~a (vm-dir vm) "/user"))
+                         (cons "PLT_PKG_BUILD_SERVICE" "1")
+                         (cons "PLT_INFO_ALLOW_VARS"
+                               (string-append
+                                (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
+                                  (if a (cdr a) ""))
+                                ";PLT_PKG_BUILD_SERVICE"))))
             #:key (vm-ssh-key vm)
             #:timeout timeout
             #:remote-tunnels (list (cons server-port server-port))))
