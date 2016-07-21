@@ -49,7 +49,7 @@
 ;;
 ;; A successful build does not require that its declared dependencies
 ;; are complete if the needed packages end up installed, anyway, but
-;; the declaraed dependencies are checked.
+;; the declared dependencies are checked.
 ;;
 ;; Even when a build is unsuccessful, any documentation that is built
 ;; along the way is extracted, if possible.
