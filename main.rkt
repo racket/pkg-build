@@ -1094,8 +1094,14 @@
       ;; Check for dependencies in `pending-pkgs`, but
       ;; we don't have to check dependencies transtively,
       ;; because the ordering of `pkgs` takes care of that.
+      ;; We do need to remove mutually dependency packages
+      ;; from pending while we check, though.
+      (define still-pending-pkgs (if (string? pkg)
+                                     (set-remove pending-pkgs pkg)
+                                     (set-subtract pending-pkgs
+                                                   (list->set pkg))))
       (cond
-       [(ormap (lambda (dep) (set-member? pending-pkgs dep))
+       [(ormap (lambda (dep) (set-member? still-pending-pkgs dep))
                (if (string? pkg)
                    (pkg-deps pkg)
                    (apply append (map pkg-deps pkg))))
@@ -1137,13 +1143,19 @@
     (break-thread (running-th r))
     (sync (running-th r)))
 
+  (define (multi-list->set pkgs)
+    (for/fold ([s (set)]) ([pkg-or-pkgs (in-list pkgs)])
+      (if (string? pkg-or-pkgs)
+          (set-add s pkg-or-pkgs)
+          (set-union s (list->set pkg-or-pkgs)))))
+  
   ;; Build a group of packages, trying smaller
   ;; groups if the whole group fails or is too
   ;; big:
   (define (build-all-pkgs pkgs)
     ;; pkgs is a list of string and lists (for mutual dependency)
     (let loop ([pkgs pkgs]
-               [pending-pkgs (list->set pkgs)]
+               [pending-pkgs (multi-list->set pkgs)]
                [vms vms]
                [runnings null]
                [error? #f])
@@ -1158,7 +1170,7 @@
              #t
              (apply sync runnings))))
         (loop pkgs
-              (set-subtract pending-pkgs (list->set (running-pkgs r)))
+              (set-subtract pending-pkgs (multi-list->set (running-pkgs r)))
               (cons (running-vm r) vms)
               (remq r runnings)
               (or error? (not (unbox (running-done?-box r))))))
