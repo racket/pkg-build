@@ -704,11 +704,16 @@
           null
           (let ([pkg (car l)])
             (cond
-             [(member (find! cycles pkg) cycle-stack)
+             [(let ([c-pkg (find! cycles pkg)])
+                (for/or ([cs-pkg (in-list cycle-stack)])
+                  (equal? c-pkg (find! cycles cs-pkg))))
               ;; Hit a package while processing its dependencies;
               ;; everything up to that package on the stack is
               ;; mutually dependent:
-              (for ([s (in-list (member (find! cycles pkg) (reverse cycle-stack)))])
+              (for ([s (in-list (member (find! cycles pkg)
+                                        (reverse
+                                         (for/list ([cs-pkg (in-list cycle-stack)])
+                                           (find! cycles cs-pkg)))))])
                 (union! cycles pkg s))
               (loop (cdr l) seen cycle-stack)]
              [(set-member? seen pkg)
