@@ -189,7 +189,7 @@ platform, as opposed to plain @tt{"x86_64-linux"}. On the plain
 packages are expected to be installed by a user through the
 OS@|rsquo|s package manager. On the @tt{"x86_64-linux-natipkg"}
 platform, however, native libraries are handled as on Windows and Mac
-OS X: they are expected to be provided by platform-specific packages.}
+OS: they are expected to be provided by platform-specific packages.}
 
                     @p{For example, on the @tt{"x86_64-linux-natipkg"}
 platform, the @tt{"math-lib"} package depends on the
@@ -225,7 +225,7 @@ the package a platform-specific dependency of your package for the
 @tt{"x86_64-linux-natipkg"} platform.}
 
                     @p{This option is in many ways the best one for
-users and for testing@|mdash|especially if Windows and Mac OS X
+users and for testing@|mdash|especially if Windows and Mac OS
 native-library packages are also provided@|mdash|but it@|rsquo|s more work.}
 
                     })))
