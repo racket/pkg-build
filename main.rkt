@@ -523,7 +523,7 @@
     (define key (list (vm-name vm) (vm-installed-snapshot vm)))
     (define uuid (hash-ref uuids key #f))
     (cond
-     [(equal? uuid (get-vbox-snapshot-uuid (vm-name vm) (vm-installed-snapshot vm)))
+     [(and uuid (equal? uuid (get-vbox-snapshot-uuid (vm-name vm) (vm-installed-snapshot vm))))
       (status "VM ~a is up-to-date for ~a\n" (vm-name vm) (vm-installed-snapshot vm))]
      [else
       (install vm #:one-time? one-time?)
