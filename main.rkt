@@ -1169,9 +1169,15 @@
             (parameterize-break
              #t
              (apply sync runnings))))
+        (define r-vm (running-vm r))
+        (status "Got response from ~a~a\n"
+                (vm-name r-vm)
+                (if (vm-minimal-variant r-vm)
+                    (~a " / " (vm-name (vm-minimal-variant r-vm)))
+                    ""))
         (loop pkgs
               (set-subtract pending-pkgs (multi-list->set (running-pkgs r)))
-              (cons (running-vm r) vms)
+              (cons r-vm vms)
               (remq r runnings)
               (or error? (not (unbox (running-done?-box r))))))
       (cond
