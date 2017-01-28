@@ -1267,8 +1267,15 @@
         (for*/fold ([ht ht]) ([(k v) (in-hash pkgs)]
                               [(d) (in-list v)])
           (hash-update ht d (lambda (l) (set-add l k)) (set))))
-      (define providers (add-providers (add-providers (hash) adds-pkgs)
-                                       install-adds-pkgs))
+      (define (add-module-providers ht pkgs)
+        (for*/fold ([ht ht]) ([pkg (in-set pkgs)]
+                              [(mod) (in-list (hash-ref (hash-ref pkg-details pkg) 'modules null))])
+          (define key `(module ,mod))
+          (hash-update ht key (lambda (l) (set-add l pkg)) (set))))
+      (define adds-providers (add-providers (add-providers (hash) adds-pkgs)
+                                            install-adds-pkgs))
+      (define providers (add-module-providers adds-providers
+                                              available-pkgs))
       (define conflicts
         (for/list ([(k v) (in-hash providers)]
                    #:when ((set-count v) . > . 1))
