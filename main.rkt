@@ -1316,6 +1316,16 @@
 
   (define no-conflict-doc-pkgs (set-intersect (list->set doc-pkg-list) no-conflict-pkgs))
   (define no-conflict-doc-pkg-list (sort (set->list no-conflict-doc-pkgs) string<?))
+  
+  ;; A 'doc mapping from "...-adds.rktd" has a case-folded doc name;
+  ;; build a mapping back to the actual name:
+  (define (make-doc-case-unfold)
+    (define doc-folded-to-actual
+      (for/hash ([p (in-list (directory-list doc-dir))])
+        (define s (path->string p))
+        (values (string-foldcase s) s)))
+    (lambda (s)
+      (hash-ref doc-folded-to-actual s s)))
 
   (unless skip-docs?
     ;; Save "doc" as "prev-doc", so we can preserve any documentation
@@ -1357,17 +1367,19 @@
      (lambda ()
        (stop-vbox-vm (vm-name vm) #:save-state? #t)))
     (untgz "all-doc.tgz")
-
+    
     ;; Clear links:
     (for ([f (in-list (directory-list doc-dir #:build? #t))])
       (when (regexp-match? #rx"@" f)
         (delete-directory/files f)))
 
+    (define doc-case-unfold (make-doc-case-unfold))
+
     ;; For completeness, add links for installer's docs:
     (for ([pkg (in-set install-doc-pkgs)])
       (for ([a (in-list (hash-ref install-adds-pkgs pkg))]
             #:when (eq? 'doc (car a)))
-        (define doc (cdr a))
+        (define doc (doc-case-unfold (cdr a)))
         (when (directory-exists? (build-path doc-dir doc))
           (make-file-or-directory-link doc (build-path doc-dir (~a doc "@" pkg))))))
 
@@ -1376,7 +1388,7 @@
     (for ([pkg (in-set doc-pkgs)])
       (define docs (for/list ([a (in-list (hash-ref adds-pkgs pkg))]
                               #:when (eq? 'doc (car a)))
-                     (cdr a)))
+                     (doc-case-unfold (cdr a))))
       (cond
        [(set-member? no-conflict-doc-pkgs pkg)
         ;; Create a link for fully installed documentation:
@@ -1434,6 +1446,8 @@
       (unless (equal? work (take dest (length work)))
         (error "not relative"))
       (string-join (map path->string (drop dest (length work))) "/"))
+    
+    (define doc-case-unfold (make-doc-case-unfold))
 
     (define archive-fail-pkgs
       (parameterize ([current-directory (build-path archive-fail-dir)])
@@ -1480,7 +1494,7 @@
                                 (not (set-member? no-conflict-pkgs pkg))))
         (define docs (for/list ([add (in-list adds)]
                                 #:when (eq? (car add) 'doc))
-                       (cdr add)))
+                       (doc-case-unfold (cdr add))))
         (values
          pkg
          (hash 'success-log (and (or (eq? status 'success)
@@ -1525,7 +1539,7 @@
       (for/fold ([ht summary-ht]) ([pkg (in-set install-doc-pkgs)])
         (define docs (for/list ([a (in-list (hash-ref install-adds-pkgs pkg))]
                                 #:when (eq? 'doc (car a)))
-                       (define doc (cdr a))
+                       (define doc (doc-case-unfold (cdr a)))
                        (define path (~a "doc/" (~a doc "@" pkg) "/index.html"))
                        (doc/main doc path)))
         (hash-set ht pkg (hash 'docs docs))))
