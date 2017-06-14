@@ -162,7 +162,7 @@ VM. There@|rsquo|s no way for a package to opt out of
 testing, but a package author can implement a test suite that skip tests
 under adverse conditions. In case there@|rsquo|s no other way for a test
 suite to determine that it can@|rsquo|t run, the package-build service sets
-the @tt{PLT_PKG_BUILD_SERVICE} environment variable when running
+the @tt{PLT_PKG_BUILD_SERVICE} and @tt{CI} environment variables when running
 tests@";" a test suite can explicitly check for the environment
 variable and skip tests that can@|rsquo|t work.}
 
