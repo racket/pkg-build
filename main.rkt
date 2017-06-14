@@ -332,6 +332,7 @@
                    (list (cons "PLTUSERHOME"
                                (~a (vm-dir vm) "/user"))
                          (cons "PLT_PKG_BUILD_SERVICE" "1")
+                         (cons "CI" "true")
                          (cons "PLT_INFO_ALLOW_VARS"
                                (string-append
                                 (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
