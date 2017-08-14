@@ -129,7 +129,7 @@ Libraries} below for information on implementing packages that rely on
 additional native libraries.}
 
                     @; ----------------------------------------
-                    @h3[name: "test"]{Dealing with Test Failures}
+                    @h3[id: "test"]{Dealing with Test Failures}
 
                     @p{In the absence of any @tt{"info.rkt"}-based
 specifications or @tt{test} submodules, @tt{raco test} runs each
@@ -168,7 +168,7 @@ variable and skip tests that can@|rsquo|t work.}
 
 
                     @; ----------------------------------------
-                    @h3[name: "foreign"]{Working with Native Libraries}
+                    @h3[id: "foreign"]{Working with Native Libraries}
 
                     @p{The @|ldquo|minimal@|rdquo| versus
 @|ldquo|extended@|rdquo| VM distinction begs the question of how the
