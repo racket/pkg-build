@@ -597,6 +597,7 @@
   (define (pkg-checksum pkg) (hash-ref (hash-ref pkg-details pkg) 'checksum ""))
   (define (pkg-author pkg) (hash-ref (hash-ref pkg-details pkg) 'author ""))
   (define (pkg-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".orig-CHECKSUM")))
+  (define (pkg-ring pkg) (or (hash-ref (hash-ref pkg-details pkg) 'ring #f) 0))
   (define (pkg-zip-file pkg) (build-path built-pkgs-dir (~a pkg ".zip")))
   (define (pkg-zip-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".zip.CHECKSUM")))
   (define (pkg-failure-dest pkg #:minimal? [min? #f])
@@ -1221,6 +1222,7 @@
   ;; ----------------------------------------
   (status "Assembling documentation\n")
 
+  ;; Set of names of available packages
   (define available-pkgs
     (for/set ([pkg (in-list all-pkg-names)]
               #:when
@@ -1232,12 +1234,14 @@
                      (file-exists? (pkg-zip-checksum-file pkg)))))
       pkg))
 
+  ;; Table mapping package names (for all available packages) to adds
   (define adds-pkgs
     (for/hash ([pkg (in-set available-pkgs)])
       (define adds-file (pkg-adds-file pkg))
       (define ht (call-with-input-file* adds-file read))
       (values pkg (hash-ref ht pkg null))))
-  
+
+  ;; Names of packages that provide docs (which is a subset of of the keys of `adds-pkgs`)
   (define doc-pkgs
     (for/set ([(k l) (in-hash adds-pkgs)]
               #:when (for/or ([v (in-list l)])
@@ -1247,6 +1251,7 @@
   (define doc-pkg-list
     (sort (set->list doc-pkgs) string<?))
 
+  ;; Like `adds-pkgs` and `doc-pkgs`, but for packages in the distribution
   (define install-adds-pkgs
     (call-with-input-file*
      (build-path work-dir "install-adds.rktd")
@@ -1259,28 +1264,59 @@
 
   (substatus "Packages with documentation:\n")
   (show-list doc-pkg-list)
-  
+
   ;; `conflict-pkgs` have a direct conflict, while `no-conflict-pkgs`
   ;; have no direct conflict and no dependency with a conflict
   (define-values (conflict-pkgs no-conflict-pkgs)
     (let ()
-      (define (add-providers ht pkgs)
+      (define (add-providers ht pkgs #:filter [filter (lambda (pkg) #t)])
         (for*/fold ([ht ht]) ([(k v) (in-hash pkgs)]
+                              #:when (filter k)
                               [(d) (in-list v)])
           (hash-update ht d (lambda (l) (set-add l k)) (set))))
-      (define (add-module-providers ht pkgs)
+      (define (add-module-providers ht pkgs #:filter [filter (lambda (pkg) #t)])
         (for*/fold ([ht ht]) ([pkg (in-set pkgs)]
+                              #:when (filter pkg)
                               [(mod) (in-list (hash-ref (hash-ref pkg-details pkg) 'modules null))])
           (define key `(module ,mod))
           (hash-update ht key (lambda (l) (set-add l pkg)) (set))))
-      (define adds-providers (add-providers (add-providers (hash) adds-pkgs)
-                                            install-adds-pkgs))
+
+      ;; Distinguish conflicts among ring 1/0 and conflicts among the larger
+      ;; set. If a ring 1/0 package doesn't conflicts with another ring 1/0
+      ;; package (and it shouldn't, by the definition of rings), then don't
+      ;; count it as a conflict.
+      (define (within-ring-1? pkg)
+        ((pkg-ring pkg) . <= . 1))
+      (define install-adds-providers (add-providers (hash) install-adds-pkgs))
+      (define ring1-adds-providers (add-providers install-adds-providers
+                                                  adds-pkgs
+                                                  #:filter within-ring-1?))
+      (define adds-providers (add-providers install-adds-providers
+                                            adds-pkgs))
+
+      (define ring1-providers (add-module-providers ring1-adds-providers
+                                                    available-pkgs
+                                                    #:filter within-ring-1?))
       (define providers (add-module-providers adds-providers
                                               available-pkgs))
+
+      (define ring1-conflicts
+        (for/list ([(k v) (in-hash ring1-providers)]
+                   #:when ((set-count v) . > . 1))
+          (cons k v)))
+      (define ring1-conflicting-pkgs
+        (for/fold ([s (set)]) ([v (in-list ring1-conflicts)])
+          (set-union s (cdr v))))
+      (unless (set-empty? ring1-conflicting-pkgs)
+        (substatus "Ring 0/1 conflicts found:\n")
+        (for ([pkg (in-set ring1-conflicting-pkgs)])
+          (substatus " ~a\n" pkg)))
+
       (define conflicts
         (for/list ([(k v) (in-hash providers)]
                    #:when ((set-count v) . > . 1))
           (cons k v)))
+
       (cond
        [(null? conflicts)
         (values (set) available-pkgs)]
@@ -1295,8 +1331,11 @@
           #:exists 'truncate/replace
           show-conflicts)
         (define conflicting-pkgs
-          (for/fold ([s (set)]) ([v (in-list conflicts)])
-            (set-union s (cdr v))))
+          (for*/fold ([s (set)]) ([v (in-list conflicts)]
+                                  [pkg (in-set (cdr v))]
+                                  #:when (or (not (within-ring-1? pkg))
+                                             (set-member? ring1-conflicting-pkgs pkg)))
+            (set-add s pkg)))
         (define reverse-deps
           (for*/fold ([ht (hash)]) ([pkg (in-set available-pkgs)]
                                     [dep (in-list (pkg-deps pkg))])
