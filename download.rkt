@@ -37,7 +37,7 @@
     (make-directory* installer-dir)
     (call/input-url
      installer-url
-     get-pure-port
+     (lambda (u h) (get-pure-port u h #:redirections 5))
      (lambda (i)
        (call-with-output-file*
         (build-path installer-dir installer-name)
