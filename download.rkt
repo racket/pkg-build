@@ -37,7 +37,7 @@
     (make-directory* installer-dir)
     (call/input-url
      installer-url
-     get-pure-port
+     (lambda (u [h null]) (get-pure-port u h #:redirections 5))
      (lambda (i)
        (call-with-output-file*
         (build-path installer-dir installer-name)
@@ -50,3 +50,23 @@
        (lambda (o)
          (write (list installer-name etag) o)
          (newline o))))]))
+
+(module+ test
+  (require rackunit)
+  (when (equal? (getenv "PKGBUILD_DOWNLOAD_TESTS") "x")
+    (test-case "redirects get followed"
+      (define output-dir (make-temporary-file "pkg-build~a" 'directory))
+      (dynamic-wind
+        void
+        (lambda _
+          (define installer-name "racket-7.4-x86_64-linux-natipkg.sh")
+          (define output-filename (build-path output-dir installer-name))
+          (download-installer "https://download.racket-lang.org/releases/7.4/"
+                              output-dir
+                              installer-name
+                              void
+                              void)
+          (check-true (file-exists? output-filename))
+          (check-true (> (file-size output-filename) 0)))
+        (lambda _
+          (delete-directory/files output-dir))))))

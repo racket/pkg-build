@@ -50,11 +50,5 @@ Replace "192.168.99.100" with the IP address of your VM.
 Run `racket run.rkt` to start a local build of the package catalog at
 https://pkgs.racket-lang.org/.
 
-## Known Issues
-
-* The `download-installer` procedure does not follow redirects.  This
-  means you can't use `download.racket-lang.org` as the snapshot URL,
-  instead `mirror.racket-lang.org` must be used.
-
 
 [VirtualBox]: https://www.virtualbox.org/
