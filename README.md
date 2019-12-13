@@ -18,8 +18,9 @@ the main package catalog.
 
   1. create a user named `racket`,
   1. ensure that the `racket` user can run `sudo` without a password,
-  1. install the OpenSSH server, and add your public key to the
-     `racket` user's list of authorized keys,
+  1. install the OpenSSH server, and add your public key from `~/.ssh/id_rsa.pub`
+     on your host to the `racket` user's list of authorized keys in
+     `~/.ssh/authorized_keys` on the VM,
   1. switch the VM to host-only networking and take note of its IP
      address,
   1. take a snapshot of the VM called `init`,
