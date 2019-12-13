@@ -46,8 +46,18 @@ hold the state of the build.  In that directory, create a file called
  #:snapshot-url "https://mirror.racket-lang.org/releases/7.4/"
  #:installer-platform-name "{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 7 (Wheezy)")
 ```
-1. Replace "pkg-build" with the name of your VM.
-2. Replace "192.168.99.100" with the IP address of your VM.
+1. Replace the `#:name` string `"pkg-build"` with the name of your VM, which
+   should be one of the strings shown by `VBoxManage list vms`.
+2. Replace the `#:host` string `"192.168.99.100"` with the IP address of your VM,
+   which can be found by running `hostname -I` within the VM.
+3. You may need to replace the `#:installer-platform-name` string
+   `"{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 7 (Wheezy)"`
+   with a different string such as
+   `"{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 8 (Jessie)"`.
+   If those fail with the error message `hash-ref: no value found for key`,
+   look in the same directory as `run.rkt` for a `table.rktd` file containing
+   a hash table. Find the key in that table corresponding to your VM, and
+   replace the `#:installer-platform-name` string with that key string.
 
 
 Run `racket run.rkt` to start a local build of the package catalog at
