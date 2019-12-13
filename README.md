@@ -46,8 +46,9 @@ hold the state of the build.  In that directory, create a file called
  #:snapshot-url "https://mirror.racket-lang.org/releases/7.4/"
  #:installer-platform-name "{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 7 (Wheezy)")
 ```
+1. Replace "pkg-build" with the name of your VM.
+2. Replace "192.168.99.100" with the IP address of your VM.
 
-Replace "192.168.99.100" with the IP address of your VM.
 
 Run `racket run.rkt` to start a local build of the package catalog at
 https://pkgs.racket-lang.org/.
