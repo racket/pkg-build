@@ -7,6 +7,8 @@ log() {
 }
 
 # Update this list if you add or remove VMs from the Vagrantfile.
+# These IPs must match the values specified in the Vagrantfile's
+# "private_network" statement (line ~42).
 VM_IPs=("192.168.33.2" "192.168.33.3")
 
 log "Creating VMs..."

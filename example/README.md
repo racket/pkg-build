@@ -14,7 +14,7 @@ run a local package build.
 ## First-time Setup
 
 1. From the root of this repository, run `raco pkg install --name
-   pkg-build` to install (and link) the `pkg-build` package globally.
+   pkg-build` to install the `pkg-build` package globally.
 1. From the `example` directory, run `provision.sh` to create the VMs.
 
 Two Virtual Machines will be created by the `provision.sh` script.
