@@ -13,3 +13,5 @@
              (vbox-vm #:name "pkg-build-2" #:host "192.168.33.3"))
  #:snapshot-url "https://mirror.racket-lang.org/releases/7.5/"
  #:installer-platform-name "{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 8 (Jessie)")
+
+(module test racket/base)
