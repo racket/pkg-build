@@ -191,6 +191,7 @@
 
   (define sub-dir (build-path dest-dir "pkg-build"))
   (for ([f (in-list (directory-list sub-dir))])
-    (delete-directory/files f #:must-exist? #f)
-    (rename-file-or-directory (build-path sub-dir f) f))
+    (define dest-f (build-path dest-dir f))
+    (delete-directory/files dest-f #:must-exist? #f)
+    (rename-file-or-directory (build-path sub-dir f) dest-f))
   (delete-directory sub-dir))

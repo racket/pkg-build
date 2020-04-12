@@ -1,5 +1,6 @@
 #lang scribble/manual
-@(require (for-label pkg-build))
+@(require (for-label racket/base
+                     pkg-build))
 
 @title{Pkg-Build: Building and Testing All Racket Packages}
 
@@ -115,6 +116,8 @@ files that report build and test results.
 If the work directory content persists across calls to
 @racket[build-pkgs], then @racket[build-pkgs] will incrementally
 rebuild changed packages and other packages that depends on them.
+However, a work directory must be reused only when the configuration
+supplied to @racket[build-pkgs] does not change.
 
 The work directory will include the following files and directories,
 most of which are output, some of which record state for the purpose
@@ -243,7 +246,7 @@ changes.
 @defmodule[pkg-build]
 
 The @racket[build-pkgs] function drive a package build, but it relies
-on a set of @deftech{VMs} each created by @racket[docker-vm] or
+on a set of @deftech{VMs} that are created by @racket[docker-vm] or
 @racket[vbox-vm].
 
 @defproc[(build-pkgs
@@ -255,6 +258,9 @@ on a set of @deftech{VMs} each created by @racket[docker-vm] or
 
           [#:pkgs-for-version pkgs-for-version string? (version)]
           [#:extra-packages extra-packages (listof string?) null]
+
+          [#:only-packages only-packages (or/c #f (listof string?)) #f]
+          [#:only-sys+subpath only-sys+subpath (or/c #f (cons string? string?)) null]
 
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
@@ -277,27 +283,30 @@ on a set of @deftech{VMs} each created by @racket[docker-vm] or
           [#:server-port server-port (or/c #f (integer-in 1 65535)) 18333])
          void?]{
 
-Builds packages
+Builds packages by
 @;
 @itemlist[
 
  @item{using @racket[work-dir] as the @seclink["work-dir"]{work directory};}
 
- @item{pulling an installer and initial packages from @racket[snapshot-url],
+ @item{downloading initial packages from @racket[snapshot-url],
        which can be something like @racket["https://mirror.racket-lang.org/releases/7.6/"];}
 
- @item{using @racket[installer-platform-name] to locate as installer,
+ @item{using @racket[installer-platform-name] to locate an installer at @racket[snapshot-url],
        where the name is something like
        @racket["{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 8 (Jessie)"];
        this name should be one of the entries in @filepath{installers/table.rktd} relative
-       to @racket[snapshot-url] and should be a @tt{natipkg} option consistent with
-       the @tech{VMs} specified by @racket[vms];}
+       to @racket[snapshot-url], and it should be a @tt{natipkg} option consistent with
+       the @tech{VMs} specified by @racket[vms];
+       if a minimal installer is used and package tests will be run, include
+       @racket["compiler-lib"] in @racket[extra-packages];}
 
- @item{running the @tech{VMs} machines specified by @racket[vms] which is
+ @item{running the @tech{VMs} machines specified by @racket[vms], which is
        a list of results from @racket[docker-vm] and/or
        @racket[vbox-vm];}
 
- @item{drawing additional packages form @racket[pkg-catalogs].}
+ @item{installing additional packages from @racket[pkg-catalogs]
+       individually in @tech{VMs}.}
 
 ]
 
@@ -306,40 +315,51 @@ Additional configuration options:
 @itemlist[
 
  @item{@racket[pkgs-for-version] --- The Racket version to use in
-        queries to archived catalogs. this version should be
+        queries to archived catalogs. This version should be
         consistent with @racket[snapshot-url].}
 
-
  @item{@racket[extra-packages] --- Extra packages to install within an
-       installation so that they're treated like packages included in
+       installation so that they're treated like packages that are included in
        the installer. These should be built packages (normally from
-       the snapshot site), or else the generated build packages will
+       the snapshot site), or else the generated built packages will
        not work right (especially when using multiple @tech{VMs}).}
 
- @item{@racket[steps] --- Steps that you want to include in the
-       package-build process. The steps, in order, are
+ @item{@racket[only-packages] --- When not @racket[#f], specifies a
+       subset of packages available from @racket[pkg-catalogs] to be
+       built and recorded in a catalog. Any dependencies of a
+       specified package are also included.}
+
+ @item{@racket[only-sys+subpath] --- When not @racket[#f] and when
+       @racket[only-packages] is not @racket[#f], considers only
+       dependencies for the indicated specific platform. The platform is described
+       by @racket[cons]ing a symbol matching the result of
+       @racket[(system-type)] to a string matching the result of
+       @racket[(system-library-subpath #f)].}
+
+ @item{@racket[steps] --- Steps to perform the package-build process.
+       The possible steps, in order, are
 
        @itemlist[
 
         @item{@racket['download]: download installer from snapshot
               site.}
 
-        @item{@racket['archive]: archive catalogs, downloading the
-              catalog and all packages to the work directory.}
+        @item{@racket['archive]: archive catalogs byt downloading
+              all packages to the work directory.}
 
-        @item{@racket['install]: install into each @tech{VM}.}
+        @item{@racket['install]: run the installer to set up each @tech{VM}.}
 
         @item{@racket['build]: build packages that have changed.}
 
         @item{@racket['docs]: extract and assemble documentation.}
 
-        @item{@racket['summary]: build a result-summary file and web page.}
+        @item{@racket['summary]: summarize the results as a web page.}
 
-        @item{@racket['site]: Assemble web-friendly pieces to an archive.}
+        @item{@racket['site]: assemble web-friendly pieces to an archive.}
 
        ]
 
-       You can skip steps at the beginning if you know they're already
+       You can skip steps at the beginning if you know that they're already
        done, and you can skip tests at the end if you don't want them,
        but any included steps must be contiguous and in order.}
 
@@ -362,21 +382,22 @@ Additional configuration options:
 
    @item{@racket[site-starting-point] --- Text for help to describes
          the starting point, where @racket[#f] means ``the current
-         release''.}
+         release.''}
 
-  @item{@racket[summary-omit-pkgs] --- A list of specific packages to
-        omit from the build summary.}
+  @item{@racket[summary-omit-pkgs] --- A list of packages to omit from
+        the build summary.}
 
    @item{@racket[max-build-together] --- Number of packages to build
          at once in a single @tech{VM}. Building more than one package
-         at a time can be faster, but it is not recommended: it risks
-         success when a build should have failed due to missing
-         dependencies, and it risks corruption due to especially
-         broken or nefarious packages.}
+         at a time can be faster, but it is not recommended: building
+         multiple packages risks success when a build should have
+         failed due to missing dependencies, and it risks corruption
+         due to broken or nefarious packages.}
 
    @item{@racket[server-port] --- A TCP port to use for serving
          packages from the build machine to VirtualBox @tech{VMs}.
-         This server is not needed for Docker @tech{VMs}.}
+         This server is not started if @racket[vms] contains only
+         Docker @tech{VMs}.}
 
 ]}
 

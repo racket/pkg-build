@@ -12,6 +12,7 @@
          (struct-out vm-docker)
 
          check-distinct-vm-names
+         any-vbox-vms?
 
          vbox-vm
          docker-vm
@@ -82,7 +83,6 @@
   (vm-docker name name "" dir env shell minimal-variant
              from-image))
 
-
 (define (check-distinct-vm-names vms)
   (let loop ([names #hash()] [vms vms])
     (cond
@@ -96,6 +96,16 @@
                  (cons (vm-minimal-variant vm)
                        (cdr vms))
                  (cdr vms)))])))
+
+(define (any-vbox-vms? vms)
+  (let loop ([vms vms])
+    (cond
+      [(null? vms) #f]
+      [else
+       (define vm (car vms))
+       (or (vm-vbox? vm)
+           (vm-vbox? (vm-minimal-variant vm))
+           (loop (cdr vms)))])))
 
 ;; ----------------------------------------
 
@@ -121,8 +131,7 @@
   (cond
     [(vm-vbox? vm)
      (vm-vbox-installed-snapshot vm)]
-    [(vm-docker? vm)
-     (vm-docker-from-image vm)]))
+    [(vm-docker? vm) null]))
 
 (define (vm-remote vm config)
   (remote #:host (vm-host vm)

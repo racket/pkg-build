@@ -122,6 +122,15 @@
          ;; right (especially when using multiple VMs):
          #:extra-packages [extra-packages null]
 
+         ;; If not #f, constrains archiving and building to these
+         ;; packages (plus `extra-packages`):
+         #:only-packages [only-packages #f]
+
+         ;; If not #f and `only-packages` is not #f, only considers
+         ;; dependencies for the specified platform, which is
+         ;; expressed as (cons <sym> <subpath>)
+         #:only-sys+subpath [only-platform #f]
+
          ;; Steps that you want to include; you can skip steps
          ;; at the beginning if you know they're already done, and
          ;; you can skip tests at the end if you don't want them:
@@ -264,6 +273,13 @@
                            (cons snapshot-catalog pkg-catalogs)
                            #:state-catalog state-file
                            #:relative-sources? #t
+                           #:include (and only-packages
+                                          (append extra-packages
+                                                  only-packages))
+                           #:include-deps? #t
+                           #:include-deps-sys+subpath (and only-platform
+                                                           (cons (car only-platform)
+                                                                 (string->path (cdr only-platform))))
                            #:package-exn-handler (lambda (name exn)
                                                    (hash-set! archive-failures
                                                               name
@@ -301,7 +317,8 @@
       (get-all-pkg-details-from-catalogs)))
 
   ;; ----------------------------------------
-  (when server-port
+  (when (and server-port
+             (any-vbox-vms? vms))
     (status "Starting server at locahost:~a for ~a\n" server-port archive-dir)
 
     (define server
@@ -357,9 +374,11 @@
   (substatus "Total number of packages: ~a\n" (length all-pkg-names))
   (substatus "Packages installed already: ~a\n" (length installed-pkg-names))
 
-  (define snapshot-pkgs (list->set snapshot-pkg-names))
-  (define installed-pkgs (list->set installed-pkg-names))
+  (define snapshot-pkgs (list->set snapshot-pkg-names)) ;; may end up bigger than "all"
   (define all-pkgs (list->set all-pkg-names))
+  (define installed-pkgs (for/set ([name (in-list installed-pkg-names)]
+                                   #:when (set-member? all-pkgs name))
+                           name))
 
   (define package-set-changed?
     (not (equal? all-pkgs
@@ -1168,23 +1187,25 @@
 
     ;; Get fully installed docs for non-conflicting packages:
     (dynamic-wind
-     (lambda () (vm-start (vm-name vm)))
+     (lambda () (vm-start vm #:max-vms (length vms)))
      (lambda ()
        (parameterize ([current-ssh-verbose #t])
          (define rt (vm-remote vm config))
          (make-sure-vm-is-ready vm rt)
-         (ssh #:show-time? #t
-              rt (cd-racket vm)
-              " && bin/raco pkg install -i --auto"
-              " " (apply ~a #:separator " " no-conflict-doc-pkg-list))
+         (unless (null? no-conflict-doc-pkg-list)
+           (ssh #:show-time? #t
+                rt (cd-racket vm)
+                " && bin/raco pkg install -i --auto"
+                " " (apply ~a #:separator " " no-conflict-doc-pkg-list)))
          (ssh rt (cd-racket vm)
               " && tar zcf ../all-doc.tgz doc")
          (scp rt (at-vm vm config (~a (vm-dir vm) "/all-doc.tgz"))
               (build-path work-dir "all-doc.tgz"))))
      (lambda ()
        (vm-stop vm)))
-    (untgz "all-doc.tgz")
-    
+    (parameterize ([current-directory work-dir])
+      (untgz "all-doc.tgz"))
+
     ;; Clear links:
     (for ([f (in-list (directory-list doc-dir #:build? #t))])
       (when (regexp-match? #rx"@" f)

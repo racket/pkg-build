@@ -176,7 +176,7 @@
                                                (hash))])
                     (define ht
                       (call-with-input-file*
-                       "install-uuids.rktd"
+                       (build-path work-dir "install-uuids.rktd")
                        read))
                     (if (hash? ht)
                         ht
@@ -191,15 +191,18 @@
          (docker-image-id #:name (vm-name vm))]))
     (cond
       [(and uuid (equal? uuid (get-vm-id)))
-      (status "VM ~a is up-to-date for ~a\n" (vm-name vm) (vm-vbox-installed-snapshot vm))]
-     [else
-      (install vm #:extract-installed? extract-installed?)
-      (define uuid (get-vm-id))
-      (call-with-output-file*
-       "install-uuids.rktd"
-       #:exists 'truncate
-       (lambda (o)
-         (writeln (hash-set uuids key uuid) o)))]))
+       (status "VM ~a is up-to-date~a\n" (vm-name vm)
+               (if (vm-vbox? vm)
+                   (format " for ~a" (vm-vbox-installed-snapshot vm))
+                   ""))]
+      [else
+       (install vm #:extract-installed? extract-installed?)
+       (define uuid (get-vm-id))
+       (call-with-output-file*
+        (build-path work-dir "install-uuids.rktd")
+        #:exists 'truncate
+        (lambda (o)
+          (writeln (hash-set uuids key uuid) o)))]))
 
   (for ([vm (in-list vms)]
         [i (in-naturals)])
