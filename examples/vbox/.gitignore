@@ -1,3 +1,4 @@
 *.log
 .vagrant
 install-uuids.rktd
+workdir/*

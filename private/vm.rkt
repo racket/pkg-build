@@ -1,0 +1,180 @@
+#lang racket/base
+(require racket/format
+         racket/date
+         remote-shell/ssh
+         remote-shell/vbox
+         remote-shell/docker
+         "config.rkt"
+         "status.rkt")
+
+(provide (struct-out vm)
+         (struct-out vm-vbox)
+         (struct-out vm-docker)
+
+         check-distinct-vm-names
+
+         vbox-vm
+         docker-vm
+
+         at-vm
+         q
+         cd-racket
+         make-sure-vm-is-ready
+
+         vm-config-key
+         vm-remote
+         vm-reset
+         vm-start
+         vm-stop)
+
+(struct vm (name host user dir env shell minimal-variant))
+(struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
+(struct vm-docker vm (from-image))
+
+;; Each VM must provide at least an ssh server and `tar`, and the
+;; intent is that it is otherwise isolated (e.g., no network
+;; connection except to the host)
+(define (vbox-vm
+         ;; VirtualBox VM name:
+         #:name name
+         ;; IP address of VM (from host):
+         #:host host
+         ;; User for ssh login to VM:
+         #:user [user "racket"]
+         ;; Working directory on VM:
+         #:dir [dir "/home/racket/build-pkgs"]
+         ;; Environment variables as (list (cons <str> <str>) ...)
+         #:env [env null]
+         ;; Command to run a single-stringa shell command
+         #:shell [shell '("/bin/sh" "-c")]
+         ;; Name of a clean starting snapshot in the VM:
+         #:init-shapshot [init-snapshot "init"]
+         ;; An "installed" snapshot is created after installing Racket
+         ;; and before building any package:
+         #:installed-shapshot [installed-snapshot "installed"]
+         ;; If not #f, a `vm` that is more constrained and will be
+         ;; tried as an installation target before this one:
+         #:minimal-variant [minimal-variant #f]
+         ;; Path to ssh key to use to connect to this VM:
+         ;; #f indicates that ssh's defaults are used
+         #:ssh-key [ssh-key #f])
+  (unless (complete-path? dir)
+    (error 'vbox-vm "need a complete path for #:dir"))
+  (vm-vbox name host user dir env shell minimal-variant
+           init-snapshot installed-snapshot ssh-key))
+
+(define (docker-vm
+         ;; Docker image label:
+         #:name name
+         ;; Base image:
+         #:from-image from-image
+         ;; Working directory in image:
+         #:dir [dir "/home/root/"]
+         ;; Environment variables as (list (cons <str> <str>) ...)
+         #:env [env null]
+         ;; Command to run a single-stringa shell command
+         #:shell [shell '("/bin/sh" "-c")]
+         ;; If not #f, a `vm` that is more constrained and will be
+         ;; tried as an installation target before this one:
+         #:minimal-variant [minimal-variant #f])
+  (unless (complete-path? dir)
+    (error 'docker-vm "need a complete path for #:dir"))
+  (vm-docker name name "" dir env shell minimal-variant
+             from-image))
+
+
+(define (check-distinct-vm-names vms)
+  (let loop ([names #hash()] [vms vms])
+    (cond
+      [(null? vms) names]
+      [else
+       (define vm (car vms))
+       (when (hash-ref names (vm-name vm) #f)
+         (error 'build-pkgs "duplicate VM name ~s" (vm-name vm)))
+       (loop (hash-set names (vm-name vm) #t)
+             (if (vm-minimal-variant vm)
+                 (cons (vm-minimal-variant vm)
+                       (cdr vms))
+                 (cdr vms)))])))
+
+;; ----------------------------------------
+
+(define (at-vm vm config dest)
+  (at-remote (vm-remote vm config) dest))
+
+(define (q s)
+  (~a "\"" s "\""))
+
+(define (cd-racket vm) (~a "cd " (q (vm-dir vm)) "/racket"))
+
+(define (make-sure-vm-is-ready vm rt)
+  (when (vm-vbox? vm)
+    (make-sure-remote-is-ready rt)
+    (status "Fixing time at ~a\n" (vm-name vm))
+    (ssh rt "sudo date --set=" (q (parameterize ([date-display-format 'rfc2822])
+                                    (date->string (seconds->date (current-seconds)) #t))))))
+
+;; ----------------------------------------
+
+;; Used to detect changes that trigger rebuilding the installed state:
+(define (vm-config-key vm)
+  (cond
+    [(vm-vbox? vm)
+     (vm-vbox-installed-snapshot vm)]
+    [(vm-docker? vm)
+     (vm-docker-from-image vm)]))
+
+(define (vm-remote vm config)
+  (remote #:host (vm-host vm)
+          #:kind (if (vm-docker? vm)
+                     'docker
+                     'ip)
+          #:user (vm-user vm)
+          #:env  (append
+                  (vm-env vm)
+                  (list (cons "PLTUSERHOME"
+                              (~a (vm-dir vm) "/user"))
+                        (cons "PLT_PKG_BUILD_SERVICE" "1")
+                        (cons "CI" "true")
+                        (cons "PLTSTDERR" "debug@pkg error")                         
+                        (cons "PLT_INFO_ALLOW_VARS"
+                              (string-append
+                               (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
+                                 (if a (cdr a) ""))
+                               ";PLT_PKG_BUILD_SERVICE"))))
+          #:shell (vm-shell vm)
+          #:key (and (vm-vbox? vm)
+                     (vm-vbox-ssh-key vm))
+          #:timeout (config-timeout config)
+          #:remote-tunnels (if (vm-docker? vm)
+                               null
+                               (list (cons (config-server-port config)
+                                           (config-server-port config))))))
+
+(define (vm-reset vm config)
+  (cond
+    [(vm-vbox? vm)
+     (restore-vbox-snapshot (vm-name vm) (vm-vbox-installed-snapshot vm))]
+    [(vm-docker? vm)
+     (docker-create #:name (vm-name vm)
+                    #:image-name (vm-name vm)
+                    #:volumes (list
+                               (list (config-server-dir config)
+                                     (format "~a/catalogs" (vm-dir vm))
+                                     'ro))
+                    #:network "none"
+                    #:replace? #t)]))
+
+(define (vm-start vm #:max-vms max-vms)
+  (cond
+    [(vm-vbox? vm)
+     (start-vbox-vm (vm-name vm) #:max-vms max-vms)]
+    [(vm-docker? vm)
+     (docker-start #:name (vm-name vm))]))
+
+(define (vm-stop vm)
+  (cond
+    [(vm-vbox? vm)
+     (stop-vbox-vm (vm-name vm) #:save-state? #f)]
+    [(vm-docker? vm)
+     (docker-stop #:name (vm-name vm))]))

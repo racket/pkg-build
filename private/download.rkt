@@ -20,8 +20,9 @@
      [(equal? (url-scheme installer-url) "file")
       #f]
      [else
-      (define p (head-impure-port installer-url))
-      (define h (purify-port p))
+      (define-values (p h) (get-pure-port/headers installer-url
+                                                  #:method #"HEAD"
+                                                  #:redirections 5))
       (close-input-port p)
       (extract-field "ETag" h)]))
   (cond
