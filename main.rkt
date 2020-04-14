@@ -1402,7 +1402,7 @@
     (status "Packing site to ~a\n" site-file)
 
     (define (wpath . a) (apply build-path work-dir a))
-    (define skip-paths (set (wpath "instal<ler")
+    (define skip-paths (set (wpath "installer")
                             (wpath "server" "archive")
                             (and (not built-at-site?) (wpath "server" "built" "catalog"))
                             (and (not built-at-site?) (wpath "server" "built" "pkgs"))

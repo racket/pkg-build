@@ -212,7 +212,7 @@
 
   (when install-doc-list-file
     (call-with-output-file*
-     install-doc-list-file
+     (build-path work-dir install-doc-list-file)
      #:exists 'truncate
      (lambda (o)
        (untgz (build-path work-dir "install-doc.tgz")
