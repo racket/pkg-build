@@ -1123,7 +1123,7 @@
             (substatus " ~a ~s:\n" (caar v) (cdar v))
             (show-list #:indent " " (sort (set->list (cdr  v)) string<?))))
         (show-conflicts)
-        (with-output-to-file "conflicts.txt"
+        (with-output-to-file (build-path work-dir "conflicts.txt")
           #:exists 'truncate/replace
           show-conflicts)
         (define conflicting-pkgs
