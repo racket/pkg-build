@@ -27,7 +27,7 @@
                       install-doc-list-file)
   
   (define (do-install ssh scp-to rt vm
-                      #:filesystem-catalog? [filesystem-catalog? #t]
+                      #:filesystem-catalog? [filesystem-catalog? #f]
                       #:pre-pkg-install [pre-pkg-install void])
     (define there-dir (vm-dir vm))
     (status "Preparing directory ~a\n" there-dir)
@@ -96,9 +96,9 @@
        (dynamic-wind
         (lambda () (start-vbox-vm (vm-name vm)))
         (lambda ()
-          (define rt (vm-remote vm))
+          (define rt (vm-remote vm config))
           (define (scp-to rt src dest)
-            (scp remote src (at-remote rt dest)))
+            (scp rt src (at-remote rt dest)))
           (make-sure-vm-is-ready vm rt)
           (do-install ssh scp-to rt vm)
           (when extract-installed?

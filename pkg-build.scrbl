@@ -446,7 +446,7 @@ Tests run in this @tech{VM}, however, instead of
           [#:host host string?]
           [#:user user string? "racket"]
           [#:ssh-key ssh-key (or/c #f path-string?) #f]
-          [#:dir dir string? "/home/root/"]
+          [#:dir dir string? "/home/racket/build-pkgs"]
           [#:env env (listof (cons/c string? string?)) null]
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:init-shapshot init-snapshot string? "init"]
