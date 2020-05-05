@@ -1402,7 +1402,9 @@
   ;; ----------------------------------------
 
   (unless skip-site?
-    (define site-file (build-path work-dir "site.tgz"))
+    (define site-file (build-path work-dir (if compress-site?
+                                               "site.tgz"
+                                               "site.tar")))
     (status "Packing site to ~a\n" site-file)
 
     (define (wpath . a) (apply build-path work-dir a))
