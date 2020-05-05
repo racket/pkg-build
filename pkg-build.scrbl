@@ -235,6 +235,12 @@ inputs:
    @item{@filepath{index.html} (and @filepath{robots.txt}, etc.) --- A summary of results in
          web-page form.}
 
+   @item{@filepath{site.tgz} or @filepath{site.tar} --- All files meant to populate a
+         web site, including a @filepath{doc/} directory of documentation and a
+         @filepath{server/built/catalog/} catalog of built packages that are in
+         @filepath{server/built/pkgs/}. The packed form @filepath{site.tgz} is
+         created unless @racket[#:compress-site?] is provided as @racket[#f].}
+
 ]
 
 Using this information, the @racket[build-pkgs] rebuilds a package is
@@ -273,8 +279,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:built-at-site? built-at-site? any/c #f]
 
           [#:site-url site-url (or/c #f string?) #f]
-
           [#:site-starting-point site-starting-point (or/c #f string?) #f]
+          [#:compress-site? compress-site? any/c #t]
 
           [#:summary-omit-pkgs summary-omit-pkgs (listof string?) null]
 
@@ -383,6 +389,10 @@ Additional configuration options:
    @item{@racket[site-starting-point] --- Text for help to describes
          the starting point, where @racket[#f] means ``the current
          release.''}
+
+   @item{@racket[compress-site?] --- Selects whether the
+         @racket['site] step produces @filepath{site.tgz} (if true) or
+         @filepath{site.tar} (otherwise).}
 
   @item{@racket[summary-omit-pkgs] --- A list of packages to omit from
         the build summary.}

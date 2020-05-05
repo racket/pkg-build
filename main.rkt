@@ -155,6 +155,9 @@
          ;; means "the current release":
          #:site-starting-point [site-starting-point #f]
 
+         ;; Whether to generate "site.tgz" or "site.tar"
+         #:compress-site? [compress-site? #t]
+
          ;; Omit specified packages from the summary:
          #:summary-omit-pkgs [summary-omit-pkgs null]
 
@@ -1427,13 +1430,16 @@
        site-file
        #:exists 'truncate/replace
        (lambda (o)
-         (define-values (i2 o2) (make-pipe 40960))
-         (thread (lambda ()
-                   (dynamic-wind
-                    void
-                    (lambda () (tar->output files o2))
-                    (lambda () (close-output-port o2)))))
-         (gzip-through-ports i2 o #f (current-seconds))))))
+         (cond
+           [compress-site?
+            (define-values (i2 o2) (make-pipe 40960))
+            (thread (lambda ()
+                      (dynamic-wind
+                       void
+                       (lambda () (tar->output files o2))
+                       (lambda () (close-output-port o2)))))
+            (gzip-through-ports i2 o #f (current-seconds))]
+           [else (tar->output files o)])))))
 
   ;; ----------------------------------------
   
