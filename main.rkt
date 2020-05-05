@@ -786,7 +786,7 @@
              (when (list? one-pkg)
                (unless (equal? pkg (car one-pkg))
                  (copy-file failure-dest
-                            (pkg-failure-dest (car one-pkg) #:minimal? minimal?)
+                            (pkg-failure-dest pkg #:minimal? minimal?)
                             #t)))
              (save-checksum pkg))
            ;; Keep any docs that might have been built:
