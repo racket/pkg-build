@@ -380,9 +380,10 @@
                                    #:when (set-member? all-pkgs name))
                            name))
 
+  (define previous-all-pkgs
+    (list->set previous-all-pkg-names))
   (define package-set-changed?
-    (not (equal? all-pkgs
-		 (list->set previous-all-pkg-names))))
+    (not (equal? all-pkgs previous-all-pkgs)))
   (when package-set-changed?
     (substatus "Set of available packages has changed\n"))
 
@@ -445,7 +446,7 @@
                    #:when (and (not (set-member? update-pkgs pkg))
                                (for/or ([dep (in-list (pkg-deps pkg))])
 				 (or (set-member? update-pkgs dep)
-				     (and package-set-changed?
+				     (and (set-member? previous-all-pkgs dep)
 					  (not (set-member? all-pkgs dep)))))))
            pkg))
        (if (set-empty? more-pkgs)
