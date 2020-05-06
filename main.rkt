@@ -1422,7 +1422,8 @@
                             (wpath "prev-doc")
                             (wpath "old-prev-doc")
                             (wpath "doc" "docindex.sqlite")
-                            (wpath "site.tgz")))
+                            (wpath "site.tgz")
+                            (wpath "site.tar")))
     (parameterize ([current-directory work-dir])
       (define files (for/list ([f (in-directory #f (lambda (p)
                                                      (not (set-member? skip-paths p))))]
