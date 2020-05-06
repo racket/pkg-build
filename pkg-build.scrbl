@@ -271,6 +271,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
           [#:timeout timeout real? 600]
+
+          [#:on-empty-pkg-updates on-empty-pkg-updates (-> any) void]
          
           [#:install-doc-list-file install-doc-list-file (or/c #f path-string?) #f]
 
@@ -371,6 +373,9 @@ Additional configuration options:
 
    @item{@racket[timeout] --- Timeout in seconds for any one package
          or step.}
+
+   @item{@racket[on-empty-pkg-updates] --- A thunk that is called in the
+         case that no packages need to be rebuilt.}
 
    @item{@racket[install-doc-list-file] --- If not @racket[#f], save a
          list of files in the original installation's @filepath{doc}

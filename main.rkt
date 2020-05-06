@@ -164,6 +164,10 @@
          ;; Timeout in seconds for any one package or step:
          #:timeout [timeout 600]
 
+         ;; Callback for the case that no packages have changed
+         ;; (useful for early exit)
+         #:on-empty-pkg-updates [on-empty-pkg-updates void]
+
          ;; Building more than one package at a time case be faster,
          ;; but it risks success when a build should have failed due
          ;; to missing dependencies, and it risks corruption due to
@@ -547,6 +551,9 @@
 
   (substatus "Packages that we need:\n")
   (show-list need-pkgs-list)
+
+  (when (null? need-pkgs-list)
+    (on-empty-pkg-updates))
 
   ;; ----------------------------------------
   (status "Preparing built catalog at ~a\n" built-catalog-dir)
