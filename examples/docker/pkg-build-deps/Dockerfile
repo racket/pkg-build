@@ -1,4 +1,4 @@
-FROM pkg-build-deps:min
+FROM racket/pkg-build:pkg-build-deps-min
 RUN apt-get update -y
 RUN apt-get install ca-certificates tzdata -y
 RUN apt-get install gcc -y
