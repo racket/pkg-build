@@ -41,8 +41,8 @@ possible.
 
 First, install @hyperlink["https://www.docker.com/"]{Docker}. As long
 as @exec{docker} is in your path, that may be all you need, because
-suitable starting images @tt{mflatt/pkg-build-deps} and/or
-@tt{mflatt/pkg-build-deps:min} can be downloaded automatically by
+suitable starting images @tt{racket/pkg-build-deps} and/or
+@tt{racket/pkg-build-deps-min} can be downloaded automatically by
 Docker. See @secref["starting-image"] for more information about the
 content of a suitable starting image.
 
