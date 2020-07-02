@@ -186,4 +186,5 @@
     [(vm-vbox? vm)
      (stop-vbox-vm (vm-name vm) #:save-state? #f)]
     [(vm-docker? vm)
-     (docker-stop #:name (vm-name vm))]))
+     (when (docker-running? #:name (vm-name vm))
+       (docker-stop #:name (vm-name vm)))]))
