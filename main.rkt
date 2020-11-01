@@ -136,7 +136,7 @@
 
          ;; If not #f, bytecode is compiled as machine-independent
          ;; in built packages:
-         #:machine-independent? [machine-independent? #f]
+         #:compile-any? [machine-independent? #f]
          
          ;; Steps that you want to include; you can skip steps
          ;; at the beginning if you know they're already done, and

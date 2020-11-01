@@ -269,7 +269,7 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:only-packages only-packages (or/c #f (listof string?)) #f]
           [#:only-sys+subpath only-sys+subpath (or/c #f (cons string? string?)) null]
 
-          [#:machine-independent? machine-independent? any/c #f]
+          [#:compile-any? compile-any? any/c #f]
 
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
@@ -349,7 +349,7 @@ Additional configuration options:
        @racket[(system-type)] to a string matching the result of
        @racket[(system-library-subpath #f)].}
 
- @item{@racket[machine-independent?] --- When not @racket[#f],
+ @item{@racket[compile-any?] --- When not @racket[#f],
        compiles bytecode in built packages to machine-independent
        form. The installer specified by @racket[installer-name] or
        @racket[installer-platform-name] and the packages provided by
