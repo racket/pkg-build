@@ -37,11 +37,11 @@
 (define (make-docker-vms name)
   (docker-vm
    #:name name
-   #:from-image "racket/pkg-build-deps"
+   #:from-image "racket/pkg-build:pkg-build-deps"
    #:env test-env
    #:shell xvfb-shell
    #:minimal-variant (docker-vm #:name (string-append name "-min")
-                                #:from-image "racket/pkg-build-deps-min")))
+                                #:from-image "racket/pkg-build:pkg-build-deps-min")))
 
 ;; Some packages may depend on this, since pkg-build.racket-lang.org
 ;; defines it:

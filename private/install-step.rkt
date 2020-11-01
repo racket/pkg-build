@@ -24,7 +24,8 @@
                       archive-dir
                       extra-packages
                       work-dir
-                      install-doc-list-file)
+                      install-doc-list-file
+                      machine-independent?)
   
   (define (do-install ssh scp-to rt vm
                       #:filesystem-catalog? [filesystem-catalog? #f]
@@ -44,9 +45,15 @@
     (scp-to rt pkg-adds-rkt (~a there-dir "/pkg-adds.rkt"))
     (scp-to rt pkg-list-rkt (~a there-dir "/pkg-list.rkt"))
 
+    (define MCR (mcr vm machine-independent?))
+    (when machine-independent?
+      (status "Bulding machine-dependent bytecode at ~a\n" (vm-name vm))
+      (ssh rt (cd-racket vm)
+           " && bin/racket" MCR " -l- raco setup --recompile-only"))
+
     (status "Setting catalogs at ~a\n" (vm-name vm))
     (ssh rt (cd-racket vm)
-         " && bin/raco pkg config -i --set catalogs "
+         " && bin/racket" MCR " -l- raco pkg config -i --set catalogs "
          (cond
            [filesystem-catalog?
             (~a " file://" (q there-dir) "/catalogs/built/catalog"
@@ -56,27 +63,28 @@
                 " http://localhost:" (~a (config-server-port config)) "/archive/catalog/")]))
 
     (ssh rt (cd-racket vm)
-         " && bin/raco pkg config -i --set trash-max-packages 0")
+         " && bin/racket" MCR " -l- raco pkg config -i --set trash-max-packages 0")
 
     (unless (null? extra-packages)
       (pre-pkg-install)
       (status "Extra package installs at ~a\n" (vm-name vm))
       (ssh rt (cd-racket vm)
-           " && bin/raco pkg install -i --auto"
+           " && bin/racket" MCR " -l- raco pkg install -i --auto"
            " " (apply ~a #:separator " " extra-packages))))
 
   (define (extract-installed rt vm)
     (define there-dir (vm-dir vm))
+    (define MCR (mcr vm machine-independent?))
 
     (status "Getting installed packages\n")
     (ssh rt (cd-racket vm)
-         " && bin/racket ../pkg-list.rkt > ../pkg-list.rktd")
+         " && bin/racket" MCR " ../pkg-list.rkt > ../pkg-list.rktd")
     (scp rt (at-remote rt (~a there-dir "/pkg-list.rktd"))
          (build-path work-dir "install-list.rktd"))
 
     (status "Stashing installation docs\n")
     (ssh rt (cd-racket vm)
-         " && bin/racket ../pkg-adds.rkt --all > ../pkg-adds.rktd")
+         " && bin/racket" MCR " ../pkg-adds.rkt --all > ../pkg-adds.rktd")
     (ssh rt (cd-racket vm)
          " && tar zcf ../install-doc.tgz doc")
     (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))

@@ -102,8 +102,11 @@
 
          ;; URL to provide the installer and pre-built packages:
          #:snapshot-url snapshot-url
-         ;; Name of platform for installer to get from snapshot:
-         #:installer-platform-name installer-platform-name
+         ;; Name of platform for installer to get from snapshot as it
+         ;; appears in "table.rtkd", or the file name of the installer;
+         ;; one of these must be provided
+         #:installer-name [given-installer-name #f]
+         #:installer-platform-name [installer-platform-name #f]
 
          ;; VirtualBox VMs (created by `vbox-vm`), at least one:
          #:vms vms
@@ -131,6 +134,10 @@
          ;; expressed as (cons <sym> <subpath>)
          #:only-sys+subpath [only-platform #f]
 
+         ;; If not #f, bytecode is compiled as machine-independent
+         ;; in built packages:
+         #:machine-independent? [machine-independent? #f]
+         
          ;; Steps that you want to include; you can skip steps
          ;; at the beginning if you know they're already done, and
          ;; you can skip tests at the end if you don't want them:
@@ -181,6 +188,13 @@
                ((length vms) . >= . 1)
                (andmap vm? vms))
     (error 'build-pkgs "expected a non-empty list of `vm`s"))
+
+  (unless (or given-installer-name
+              installer-platform-name)
+    (error 'build-pkgs "either #:installer-platform-name or #:installer-name must be provided"))
+  (when (and given-installer-name
+             installer-platform-name)
+    (error 'build-pkgs "only one of #:installer-platform-name and #:installer-name can be provided as a string"))
 
   (check-distinct-vm-names vms)
 
@@ -253,11 +267,14 @@
      #:exists 'truncate/replace
      (lambda (o) (write table o) (newline o))))
 
-  (define installer-name (hash-ref
-                          (call-with-input-file*
-                           installer-table-path
-                           read)
-                          installer-platform-name))
+  (define installer-name
+    (cond
+      [given-installer-name given-installer-name]
+      [else (hash-ref
+             (call-with-input-file*
+              installer-table-path
+              read)
+             installer-platform-name)]))
   (substatus "Installer is ~a\n" installer-name)
 
   ;; ----------------------------------------
@@ -350,7 +367,8 @@
                     archive-dir
                     extra-packages
                     work-dir
-                    install-doc-list-file)))
+                    install-doc-list-file
+                    machine-independent?)))
   
   ;; ----------------------------------------
   (status "Resetting ready content of ~a\n" built-pkgs-dir)
@@ -358,7 +376,10 @@
   (make-directory* built-pkgs-dir)
 
   (define installed-pkg-names
-    (call-with-input-file* (build-path work-dir "install-list.rktd") read))
+    (let ([f (build-path work-dir "install-list.rktd")])
+      (if (file-exists? f)
+          (call-with-input-file* f read)
+          '())))
 
   (define (read-optional-file fn)
     (define p (build-path work-dir fn))
@@ -620,6 +641,8 @@
   (make-directory* dumpster-pkgs-dir)
   (make-directory* dumpster-adds-dir)
 
+  (define (MCR vm) (mcr vm machine-independent?))
+
   (define catalog-lock (make-semaphore 1))
 
   (define (pkg-adds-file pkg)
@@ -692,7 +715,7 @@
           ;; Try to install:
           (ssh #:show-time? #t
                rt (cd-racket vm)
-               " && bin/raco pkg install -u --auto"
+               " && bin/racket" (MCR vm) " -l- raco pkg install -u --auto"
                (if one-pkg "" " --fail-fast")
                " " pkgs-str
                #:mode 'result
@@ -709,7 +732,7 @@
             ;; installation.
             (ssh #:show-time? #t
                  rt (cd-racket vm)
-                 " && bin/racket ../pkg-list.rkt --user > ../user-list.rktd")
+                 " && bin/racket" (MCR vm) " ../pkg-list.rkt --user > ../user-list.rktd")
             (define temp-file (make-temporary-file "user-list~a.rktd"))
             (scp rt (at-vm vm config (~a there-dir "/user-list.rktd")) temp-file)
             (define new-pkgs (call-with-input-file* temp-file read))
@@ -727,7 +750,7 @@
          (and ok?
               (ssh #:show-time? #t
                    rt (cd-racket vm)
-                   " && bin/raco setup -nxiID --check-pkg-deps --pkgs "
+                   " && bin/racket" (MCR vm) " -l- setup -nxiID --check-pkg-deps --pkgs "
                    " " pkgs-str
                    #:mode 'result
                    #:failure-log deps-failure-dest)))
@@ -745,13 +768,13 @@
           ;; even on failure. We'll put it in the "dumpster".
           (or ok? one-pkg)
           (ssh rt (cd-racket vm)
-               " && bin/racket ../pkg-adds.rkt " pkgs-str
+               " && bin/racket " (MCR vm) " ../pkg-adds.rkt " pkgs-str
                " > ../pkg-adds.rktd"
                #:mode 'result
                #:failure-log (and ok? failure-dest))
           (for/and ([pkg (in-list flat-pkgs)])
             (ssh rt (cd-racket vm)
-                 " && bin/raco pkg create --from-install --built"
+                 " && bin/racket" (MCR vm) " -l- raco pkg create --from-install --built"
                  " --dest " there-dir "/built"
                  " " pkg
                  #:mode 'result
@@ -834,8 +857,8 @@
        (define test-ok?
          (ssh #:show-time? #t
               rt (cd-racket vm)
-              " && bin/raco pkg install -u --auto " pkgs-str
-              " && bin/raco test --drdr --package " pkgs-str
+              " && bin/racket" (MCR vm) " -l- raco pkg install -u --auto " pkgs-str
+              " && bin/racket" (MCR vm) " -l- raco test --drdr --package " pkgs-str
               #:mode 'result
               #:success-log test-success-dest
               #:failure-log test-failure-dest))
@@ -1060,9 +1083,10 @@
 
   ;; Like `adds-pkgs` and `doc-pkgs`, but for packages in the distribution
   (define install-adds-pkgs
-    (call-with-input-file*
-     (build-path work-dir "install-adds.rktd")
-     read))
+    (let ([f (build-path work-dir "install-adds.rktd")])
+      (if (file-exists? f)
+          (call-with-input-file* f read)
+          #hash())))
   (define install-doc-pkgs
     (for/set ([(k l) (in-hash install-adds-pkgs)]
               #:when (for/or ([v (in-list l)])
@@ -1204,10 +1228,26 @@
          (define rt (vm-remote vm config))
          (make-sure-vm-is-ready vm rt)
          (unless (null? no-conflict-doc-pkg-list)
-           (ssh #:show-time? #t
-                rt (cd-racket vm)
-                " && bin/raco pkg install -i --auto"
-                " " (apply ~a #:separator " " no-conflict-doc-pkg-list)))
+           (cond
+             [(not machine-independent?)
+              ;; To work with older Racket versions, for now, don't
+              ;; assume that `--sync-docs-only` is available:
+              (ssh #:show-time? #t
+                   rt (cd-racket vm)
+                   " && bin/raco pkg install -i --auto"
+                   " " (apply ~a #:separator " " no-conflict-doc-pkg-list))]
+             [else
+              ;; Use faster and more careful mode
+              (ssh #:show-time? #t
+                   rt (cd-racket vm)
+                   " && bin/racket" (MCR vm) " -l- raco pkg install --no-setup -i --auto"
+                   " " (apply ~a #:separator " " no-conflict-doc-pkg-list))
+              (ssh #:show-time? #t
+                   rt (cd-racket vm)
+                   " && bin/racket" (MCR vm) " -l- raco setup -n --no-pkg-deps --sync-docs-only")
+              (ssh #:show-time? #t
+                   rt (cd-racket vm)
+                   " && bin/racket" (MCR vm) " -l- raco setup --only --doc-index")]))
          (ssh rt (cd-racket vm)
               " && tar zcf ../all-doc.tgz doc")
          (scp rt (at-vm vm config (~a (vm-dir vm) "/all-doc.tgz"))

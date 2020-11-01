@@ -258,7 +258,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
 @defproc[(build-pkgs
           [#:work-dir work-dir path-string? (current-directory)]
           [#:snapshot-url snapshot-url string?]
-          [#:installer-platform-name installer-platform-name string?]
+          [#:installer-name installer-name (or/c string? #f) #f]
+          [#:installer-platform-name installer-platform-name (or/c string? #f) #f]
           [#:vms vms (listof vm?)]
           [#:pkg-catalogs pkg-catalogs (listof string?) (list "https://pkgs.racket-lang.org/")]
 
@@ -267,6 +268,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
 
           [#:only-packages only-packages (or/c #f (listof string?)) #f]
           [#:only-sys+subpath only-sys+subpath (or/c #f (cons string? string?)) null]
+
+          [#:machine-independent? machine-independent? any/c #f]
 
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
@@ -300,11 +303,13 @@ Builds packages by
  @item{downloading initial packages from @racket[snapshot-url],
        which can be something like @racket["https://mirror.racket-lang.org/releases/7.6/"];}
 
- @item{using @racket[installer-platform-name] to locate an installer at @racket[snapshot-url],
-       where the name is something like
+ @item{using either @racket[installer-name] or
+       @racket[installer-platform-name] (exactly one of them must be supplied as non-@racket[#f])
+       to locate an installer at @racket[snapshot-url], where @racket[installer-name]
+       is something like @racket["racket-x86_64-linux-natipkg.tgz"], or @racket[installer-platform-name] is something like
        @racket["{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 8 (Jessie)"];
-       this name should be one of the entries in @filepath{installers/table.rktd} relative
-       to @racket[snapshot-url], and it should be a @tt{natipkg} option consistent with
+       in the latter case, the name should be one of the entries in @filepath{installers/table.rktd} relative
+       to @racket[snapshot-url]; in both cases, it should be a @tt{natipkg} option consistent with
        the @tech{VMs} specified by @racket[vms];
        if a minimal installer is used and package tests will be run, include
        @racket["compiler-lib"] in @racket[extra-packages];}
@@ -343,6 +348,13 @@ Additional configuration options:
        by @racket[cons]ing a symbol matching the result of
        @racket[(system-type)] to a string matching the result of
        @racket[(system-library-subpath #f)].}
+
+ @item{@racket[machine-independent?] --- When not @racket[#f],
+       compiles bytecode in built packages to machine-independent
+       form. The installer specified by @racket[installer-name] or
+       @racket[installer-platform-name] and the packages provided by
+       @racket[pkg-catalogs] must also have machine-independent
+       bytecode.}
 
  @item{@racket[steps] --- Steps to perform the package-build process.
        The possible steps, in order, are
@@ -434,8 +446,8 @@ Creates a @tech{VM} that specifies a Docker image and container. The
 given @racket[name] will be used to name a new image (replacing any
 existing @racket[name] image) that is built starting with
 @racket[from-image] and that holds the Racket installation.
-@margin-note*{At the time of writing, @racket["mflatt/pkg-build-deps"]
-and/or @racket["mflatt/pkg-build-deps:min"] is suitable as
+@margin-note*{At the time of writing, @racket["racket/pkg-build:pkg-build-deps"]
+and/or @racket["racket/pkg-build:pkg-build-deps-min"] is suitable as
 @racket[from-image].} The given @racket[name] is also used for a
 container that is an instance of the image; the container is created
 fresh (replacing any existing @racket[name] container) for each

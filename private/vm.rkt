@@ -20,6 +20,7 @@
          at-vm
          q
          cd-racket
+         mcr
          make-sure-vm-is-ready
 
          vm-config-key
@@ -116,6 +117,11 @@
   (~a "\"" s "\""))
 
 (define (cd-racket vm) (~a "cd " (q (vm-dir vm)) "/racket"))
+
+(define (mcr vm machine-independent?)
+  (if machine-independent?
+      (~a " -MCR " (q (vm-dir vm)) "/zo:")
+      ""))
 
 (define (make-sure-vm-is-ready vm rt)
   (when (vm-vbox? vm)
