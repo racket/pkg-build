@@ -454,7 +454,10 @@ fresh (replacing any existing @racket[name] container) for each
 package to build.
 
 The @racket[dir] argument specifies a working directory within the
-Docker container.
+Docker container; it must be a @racket[complete-path?], when viewed
+as a unix path, i.e.,
+@racket[(complete-path? (bytes->path (string->bytes/utf-8 dir) 'unix))]
+must return @racket[#t].
 
 The @racket[env] argument specifies environment variable settings that
 prefix every command.
@@ -489,8 +492,9 @@ virtual machine and the host's SSH settings so that @exec{ssh} works
 without a password. The @racket[ssh-key] argument can name a file
 containing private key to use for @exec{ssh} as @racket[user].
 
-The @racket[dir] argument specifies a working directory within the
-virtual machine.
+The @racket[dir] argument specifies a working directory
+within the virtual machine, with the same checks as
+@racket[docker-vm]'s @racket[_dir] argument.
 
 The @racket[env] argument specifies environment variable settings that
 prefix every command.

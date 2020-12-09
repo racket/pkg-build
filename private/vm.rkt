@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/format
          racket/date
+         racket/contract
          remote-shell/ssh
          remote-shell/vbox
          remote-shell/docker
@@ -14,9 +15,23 @@
          check-distinct-vm-names
          any-vbox-vms?
 
-         vbox-vm
-         docker-vm
-
+         (contract-out
+          [vbox-vm (->* (#:name string? #:host string?)
+                        (#:user string?
+                         #:ssh-key (or/c #f path-string?)
+                         #:dir (and/c string? complete-as-unix-path?)
+                         #:env (listof (cons/c string? string?))
+                         #:shell (listof string?)
+                         #:init-shapshot string?
+                         #:installed-shapshot string?
+                         #:minimal-variant (or/c #f vm?))
+                        vm?)]
+          [docker-vm (->* (#:name string? #:from-image string?)
+                          (#:dir (and/c string? complete-as-unix-path?)
+                           #:env (listof (cons/c string? string?))
+                           #:shell (listof string?)
+                           #:minimal-variant (or/c #f vm?))
+                          vm?)])
          at-vm
          q
          cd-racket
@@ -32,6 +47,14 @@
 (struct vm (name host user dir env shell minimal-variant))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
 (struct vm-docker vm (from-image))
+
+(define (complete-as-unix-path? dir)
+  (complete-path? (bytes->path (string->bytes/utf-8 dir) 'unix)))
+(module+ test
+  (require rackunit)
+  (check-true (complete-as-unix-path? "/Users/home/name"))
+  (check-false (complete-as-unix-path? "home/name"))
+  (check-false (complete-as-unix-path? "C:\\a\\b\\c")))
 
 ;; Each VM must provide at least an ssh server and `tar`, and the
 ;; intent is that it is otherwise isolated (e.g., no network
@@ -60,8 +83,6 @@
          ;; Path to ssh key to use to connect to this VM:
          ;; #f indicates that ssh's defaults are used
          #:ssh-key [ssh-key #f])
-  (unless (complete-path? dir)
-    (error 'vbox-vm "need a complete path for #:dir"))
   (vm-vbox name host user dir env shell minimal-variant
            init-snapshot installed-snapshot ssh-key))
 
@@ -79,8 +100,6 @@
          ;; If not #f, a `vm` that is more constrained and will be
          ;; tried as an installation target before this one:
          #:minimal-variant [minimal-variant #f])
-  (unless (complete-path? dir)
-    (error 'docker-vm "need a complete path for #:dir"))
   (vm-docker name name "" dir env shell minimal-variant
              from-image))
 
