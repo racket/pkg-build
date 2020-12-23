@@ -384,7 +384,7 @@
   (define (read-optional-file fn)
     (define p (build-path work-dir fn))
     (define r
-      (and (file-exists? fn)
+      (and (file-exists? p)
            (with-handlers ([exn:fail? (lambda (exn)
                                         (log-error "~s" (exn-message exn))
                                         #f)])
