@@ -69,7 +69,7 @@
       (pre-pkg-install)
       (status "Extra package installs at ~a\n" (vm-name vm))
       (ssh rt (cd-racket vm)
-           " && bin/racket" MCR " -l- raco pkg install -i --auto"
+           " && bin/racket" MCR " -l- raco pkg install -i --recompile-only --auto"
            " " (apply ~a #:separator " " extra-packages))))
 
   (define (extract-installed rt vm)
