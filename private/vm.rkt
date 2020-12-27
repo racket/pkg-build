@@ -34,7 +34,6 @@
                            #:memory-mb (or/c #f exact-nonnegative-integer?)
                            #:swap-mb (or/c #f exact-nonnegative-integer?))
                           vm?)])
-         at-vm
          q
          cd-racket
          mcr
@@ -135,10 +134,7 @@
            (loop (cdr vms)))])))
 
 ;; ----------------------------------------
-
-(define (at-vm vm config dest)
-  (at-remote (vm-remote vm config) dest))
-
+ 
 (define (q s)
   (~a "\"" s "\""))
 
@@ -165,24 +161,28 @@
      (vm-vbox-installed-snapshot vm)]
     [(vm-docker? vm) null]))
 
-(define (vm-remote vm config)
+(define (vm-remote vm config machine-independent?)
   (remote #:host (vm-host vm)
           #:kind (if (vm-docker? vm)
                      'docker
                      'ip)
           #:user (vm-user vm)
-          #:env  (append
-                  (vm-env vm)
-                  (list (cons "PLTUSERHOME"
-                              (~a (vm-dir vm) "/user"))
-                        (cons "PLT_PKG_BUILD_SERVICE" "1")
-                        (cons "CI" "true")
-                        (cons "PLTSTDERR" "debug@pkg error")                         
-                        (cons "PLT_INFO_ALLOW_VARS"
-                              (string-append
-                               (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
-                                 (if a (cdr a) ""))
-                               ";PLT_PKG_BUILD_SERVICE"))))
+          #:env (append
+                 (vm-env vm)
+                 (list (cons "PLTUSERHOME"
+                             (~a (vm-dir vm) "/user"))
+                       (cons "PLT_PKG_BUILD_SERVICE" "1")
+                       (cons "CI" "true")
+                       (cons "PLTSTDERR" "debug@pkg error")                         
+                       (cons "PLT_INFO_ALLOW_VARS"
+                             (string-append
+                              (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
+                                (if a (cdr a) ""))
+                              ";PLT_PKG_BUILD_SERVICE")))
+                 (if machine-independent?
+                     (list
+                      (cons "PLTCOMPILEDROOTS" (string-append (vm-dir vm) "/zo:")))
+                     null))
           #:shell (vm-shell vm)
           #:key (and (vm-vbox? vm)
                      (vm-vbox-ssh-key vm))

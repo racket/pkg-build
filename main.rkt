@@ -643,6 +643,19 @@
 
   (define (MCR vm) (mcr vm machine-independent?))
 
+  (define (ssh-racket vm rt
+                      #:mode [mode 'error]
+                      #:failure-log [failure-log #f]
+                      #:success-log [success-log #f]
+                      . args)
+    (apply ssh rt
+           #:show-time? #t
+           #:mode mode
+           #:failure-log failure-log
+           #:success-log success-log
+           (cd-racket vm)
+           " && bin/racket" (MCR vm) args))
+
   (define catalog-lock (make-semaphore 1))
 
   (define (pkg-adds-file pkg)
@@ -708,19 +721,17 @@
     (dynamic-wind
      (lambda () (vm-start vm #:max-vms (length vms)))
      (lambda ()
-       (define rt (vm-remote vm config))
+       (define rt (vm-remote vm config machine-independent?))
        (make-sure-vm-is-ready vm rt)
        (define ok?
          (and
           ;; Try to install:
-          (ssh #:show-time? #t
-               rt (cd-racket vm)
-               " && bin/racket" (MCR vm) " -l- raco pkg install -u --auto"
-               (if one-pkg "" " --fail-fast")
-               " " pkgs-str
-               #:mode 'result
-               #:failure-log failure-dest
-               #:success-log install-success-dest)
+          (ssh-racket vm rt " -l- raco pkg install -u --auto"
+                      (if one-pkg "" " --fail-fast")
+                      " " pkgs-str
+                      #:mode 'result
+                      #:failure-log failure-dest
+                      #:success-log install-success-dest)
           ;; Copy success log for other packages in the group:
           (for ([pkg (in-list (cdr flat-pkgs))])
             (copy-file install-success-dest
@@ -730,11 +741,9 @@
             ;; Make sure that any extra installed packages used were previously
             ;; built, since we want built packages to be consistent with a binary
             ;; installation.
-            (ssh #:show-time? #t
-                 rt (cd-racket vm)
-                 " && bin/racket" (MCR vm) " ../pkg-list.rkt --user > ../user-list.rktd")
+            (ssh-racket vm rt " ../pkg-list.rkt --user > ../user-list.rktd")
             (define temp-file (make-temporary-file "user-list~a.rktd"))
-            (scp rt (at-vm vm config (~a there-dir "/user-list.rktd")) temp-file)
+            (scp rt (at-remote rt (~a there-dir "/user-list.rktd")) temp-file)
             (define new-pkgs (call-with-input-file* temp-file read))
             (delete-file temp-file)
             (for/and ([pkg (in-list new-pkgs)])
@@ -748,12 +757,10 @@
                             pkg))))))
        (define deps-ok?
          (and ok?
-              (ssh #:show-time? #t
-                   rt (cd-racket vm)
-                   " && bin/racket" (MCR vm) " -l- setup -nxiID --check-pkg-deps --pkgs "
-                   " " pkgs-str
-                   #:mode 'result
-                   #:failure-log deps-failure-dest)))
+              (ssh-racket vm rt " -l- setup -nxiID --check-pkg-deps --pkgs "
+                          " " pkgs-str
+                          #:mode 'result
+                          #:failure-log deps-failure-dest)))
        (when (and ok? one-pkg (not deps-ok?))
          ;; Copy dependency-failure log for other packages in the group:
          (for ([pkg (in-list (cdr flat-pkgs))])
@@ -767,18 +774,16 @@
           ;; dependent packages), then try to save generated documentation
           ;; even on failure. We'll put it in the "dumpster".
           (or ok? one-pkg)
-          (ssh rt (cd-racket vm)
-               " && bin/racket " (MCR vm) " ../pkg-adds.rkt " pkgs-str
-               " > ../pkg-adds.rktd"
-               #:mode 'result
-               #:failure-log (and ok? failure-dest))
+          (ssh-racket vm rt " ../pkg-adds.rkt " pkgs-str
+                      " > ../pkg-adds.rktd"
+                      #:mode 'result
+                      #:failure-log (and ok? failure-dest))
           (for/and ([pkg (in-list flat-pkgs)])
-            (ssh rt (cd-racket vm)
-                 " && bin/racket" (MCR vm) " -l- raco pkg create --from-install --built"
-                 " --dest " there-dir "/built"
-                 " " pkg
-                 #:mode 'result
-                 #:failure-log (and ok? failure-dest)))))
+            (ssh-racket vm rt " -l- raco pkg create --from-install --built"
+                        " --dest " there-dir "/built"
+                        " " pkg
+                        #:mode 'result
+                        #:failure-log (and ok? failure-dest)))))
        (cond
         [(and ok? doc-ok? (or deps-ok? one-pkg))
          (for ([pkg (in-list flat-pkgs)])
@@ -793,11 +798,11 @@
              (delete-file (pkg-test-failure-dest pkg)))
            (when (file-exists? (pkg-test-success-dest pkg))
              (delete-file (pkg-test-success-dest pkg)))
-           (scp rt (at-vm vm config (~a there-dir "/built/" pkg ".zip"))
+           (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip"))
                 built-pkgs-dir)
-           (scp rt (at-vm vm config (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
+           (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
                 built-pkgs-dir)
-           (scp rt (at-vm vm config (~a there-dir "/pkg-adds.rktd"))
+           (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))
                 (build-path built-dir "adds" (format "~a-adds.rktd" pkg)))
            (define deps-msg (if deps-ok? "" ", but problems with dependency declarations"))
            (call-with-output-file*
@@ -824,13 +829,13 @@
              (save-checksum pkg))
            ;; Keep any docs that might have been built:
            (for ([pkg (in-list flat-pkgs)])
-             (scp rt (at-vm vm config (~a there-dir "/built/" pkg ".zip"))
+             (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip"))
                   dumpster-pkgs-dir
                   #:mode 'result)
-             (scp rt (at-vm vm config (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
+             (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
                   dumpster-pkgs-dir
                   #:mode 'result)
-             (scp rt (at-vm vm config (~a there-dir "/pkg-adds.rktd"))
+             (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))
                   (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg))
                   #:mode 'result)))
          (substatus "*** failed ***\n")])
@@ -852,7 +857,7 @@
     (dynamic-wind
      (lambda () (vm-start vm #:max-vms (length vms)))
      (lambda ()
-       (define rt (vm-remote vm config))
+       (define rt (vm-remote vm config machine-independent?))
        (make-sure-vm-is-ready vm rt)
        (define test-ok?
          (ssh #:show-time? #t
@@ -1225,7 +1230,7 @@
      (lambda () (vm-start vm #:max-vms (length vms)))
      (lambda ()
        (parameterize ([current-ssh-verbose #t])
-         (define rt (vm-remote vm config))
+         (define rt (vm-remote vm config machine-independent?))
          (make-sure-vm-is-ready vm rt)
          (unless (null? no-conflict-doc-pkg-list)
            (cond
@@ -1238,19 +1243,13 @@
                    " " (apply ~a #:separator " " no-conflict-doc-pkg-list))]
              [else
               ;; Use faster and more careful mode
-              (ssh #:show-time? #t
-                   rt (cd-racket vm)
-                   " && bin/racket" (MCR vm) " -l- raco pkg install --no-setup -i --auto"
-                   " " (apply ~a #:separator " " no-conflict-doc-pkg-list))
-              (ssh #:show-time? #t
-                   rt (cd-racket vm)
-                   " && bin/racket" (MCR vm) " -l- raco setup -n --no-pkg-deps --sync-docs-only")
-              (ssh #:show-time? #t
-                   rt (cd-racket vm)
-                   " && bin/racket" (MCR vm) " -l- raco setup --only --doc-index")]))
+              (ssh-racket vm rt " -l- raco pkg install --no-setup -i --auto"
+                          " " (apply ~a #:separator " " no-conflict-doc-pkg-list))
+              (ssh-racket vm rt " -l- raco setup -n --no-pkg-deps --sync-docs-only")
+              (ssh-racket vm rt " -l- raco setup --only --doc-index")]))
          (ssh rt (cd-racket vm)
               " && tar zcf ../all-doc.tgz doc")
-         (scp rt (at-vm vm config (~a (vm-dir vm) "/all-doc.tgz"))
+         (scp rt (at-remote rt (~a (vm-dir vm) "/all-doc.tgz"))
               (build-path work-dir "all-doc.tgz"))))
      (lambda ()
        (vm-stop vm)))

@@ -86,7 +86,7 @@ form.}
                     @; ----------------------------------------
                     @h3{Limitations}
 
-                    @hx{Only Packages from the Main Catalog are Supported}
+                    @hx{Only Packages From the Main Catalog Are Supported}
 
                     @p{The package-build service does not support
 references to @a[href: "http://planet.racket-lang.org"]{PLaneT
@@ -96,7 +96,7 @@ depends on one of those, then the package installation fails, because
 package builds are performed on a VM without network
 connectivity.}
 
-                    @hx{Few System Libraries are Installed}
+                    @hx{Few System Libraries Are Installed}
 
                     @p{Each package is installed on a minimal VM that
 omits as many system libraries and tools as is practical. If building
@@ -127,6 +127,19 @@ service from straighforwardly running a package@|rsquo|s tests. See
 libraries are limited. See @a[href: "#foreign"]{Working with Native
 Libraries} below for information on implementing packages that rely on
 additional native libraries.}
+
+                    @hx{Platform-Specific Compiled Files May Not Be In @tt{"compiled"}}
+
+                    @p{When the package-build service is meant to
+generate a catalog of built packages for use with multiple variants of
+Racket (i.e., CS on different platforms as well as BC), then
+@tt{"compiled"} will contain machine-independent compiled code, which
+loads slowly. Machine-specific compiled code is loaded though a
+separate filesystem location as specified by the
+@tt{current-compiled-file-roots} parameter and @tt{PLTCOMPILEDROOTS}
+environment variable. Using the content of @tt{"compiled"} directly or
+trying to run @tt{raco make} or @tt{raco setup} in a subprocess can go
+wong without taking extra care.}
 
                     @; ----------------------------------------
                     @h3[id: "test"]{Dealing with Test Failures}
