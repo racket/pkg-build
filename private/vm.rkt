@@ -30,7 +30,9 @@
                           (#:dir (and/c string? complete-as-unix-path?)
                            #:env (listof (cons/c string? string?))
                            #:shell (listof string?)
-                           #:minimal-variant (or/c #f vm?))
+                           #:minimal-variant (or/c #f vm?)
+                           #:memory-mb (or/c #f exact-nonnegative-integer?)
+                           #:swap-mb (or/c #f exact-nonnegative-integer?))
                           vm?)])
          at-vm
          q
@@ -46,7 +48,7 @@
 
 (struct vm (name host user dir env shell minimal-variant))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
-(struct vm-docker vm (from-image))
+(struct vm-docker vm (from-image memory-mb swap-mb))
 
 (define (complete-as-unix-path? dir)
   (complete-path? (bytes->path (string->bytes/utf-8 dir) 'unix)))
@@ -99,9 +101,14 @@
          #:shell [shell '("/bin/sh" "-c")]
          ;; If not #f, a `vm` that is more constrained and will be
          ;; tried as an installation target before this one:
-         #:minimal-variant [minimal-variant #f])
+         #:minimal-variant [minimal-variant #f]
+         ;; Limit on "real" memory available to the container in megabytes:
+         #:memory-mb [memory-mb  #f]
+         ;; Amount of additional swap space available, defaults to `memory-mb`:
+         #:swap-mb [swap-mb #f])
   (vm-docker name name "" dir env shell minimal-variant
-             from-image))
+             from-image
+             memory-mb swap-mb))
 
 (define (check-distinct-vm-names vms)
   (let loop ([names #hash()] [vms vms])
@@ -197,6 +204,8 @@
                                      (format "~a/catalogs" (vm-dir vm))
                                      'ro))
                     #:network "none"
+                    #:memory-mb (vm-docker-memory-mb vm)
+                    #:swap-mb (vm-docker-swap-mb vm)
                     #:replace? #t)]))
 
 (define (vm-start vm #:max-vms max-vms)

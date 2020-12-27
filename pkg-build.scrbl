@@ -439,6 +439,8 @@ Recognizes a @tech{VM} crreated by @racket[docker-vm] or @racket[vbox-vm].}
           [#:dir dir string? "/home/root/"]
           [#:env env (listof (cons/c string? string?)) null]
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
+          [#:memory-mb memory-mb (or/c #f exact-positive-integer?) #f]
+          [#:swap-mb swap-mb (or/c #f exact-positive-integer?) #f]
           [#:minimal-variant minimal-variant (or/c #f vm?) #f])
          vm?]{
 
@@ -464,6 +466,13 @@ prefix every command.
 
 The @racket[shell] argument determines the shell command that is used
 to run shell-command strings in the container.
+
+The @racket[memory-mb] and @racket[swap-mb] arguments set memory-use
+constraints on the created container. The @racket[memory-mb] value
+corresponds to ``real'' memory in megabytes, and @racket[swap-mb] is
+additional swap space. If either is non-@racket[#f], the same value is
+used in place of a @racket[#f] for the other. If both are @racket[#f],
+no specific limit is imposed.
 
 The @racket[minimal-variant] argument, if not @racket[#f], specifies a
 @tech{VM} to try before this one. If installation fails with the

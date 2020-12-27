@@ -10,11 +10,11 @@
 (module+ main
   (build-pkgs
    #:work-dir workdir
-   #:snapshot-url "https://mirror.racket-lang.org/releases/7.6/"
+   #:snapshot-url "https://mirror.racket-lang.org/releases/7.9/"
 
-   #:installer-platform-name "{1} Racket | {3} Linux | {3} x64_64 (64-bit), natipkg; built on Debian 8 (Jessie)"
+   #:installer-name "racket-7.9-x86_64-linux-natipkg.sh"
 
-   #:pkgs-for-version "7.6"
+   #:pkgs-for-version "7.9"
    
    #:extra-packages '("main-distribution-test")
 
@@ -33,6 +33,10 @@
    
    #:steps (steps-in 'download 'site)))
 
+;; Set to #f to disable the memory limit on cnotainers; if not #f,
+;; twice as much memory will be available counting swap:
+(define memory-mb 1024)
+
 ;; Create Docker "full" and "minimal" variants:
 (define (make-docker-vms name)
   (docker-vm
@@ -40,8 +44,10 @@
    #:from-image "racket/pkg-build:pkg-build-deps"
    #:env test-env
    #:shell xvfb-shell
+   #:memory-mb memory-mb
    #:minimal-variant (docker-vm #:name (string-append name "-min")
-                                #:from-image "racket/pkg-build:pkg-build-deps-min")))
+                                #:from-image "racket/pkg-build:pkg-build-deps-min"
+                                #:memory-mb memory-mb)))
 
 ;; Some packages may depend on this, since pkg-build.racket-lang.org
 ;; defines it:
