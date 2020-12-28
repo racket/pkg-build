@@ -104,7 +104,7 @@
        (dynamic-wind
         (lambda () (start-vbox-vm (vm-name vm)))
         (lambda ()
-          (define rt (vm-remote vm config))
+          (define rt (vm-remote vm config machine-independent?))
           (define (scp-to rt src dest)
             (scp rt src (at-remote rt dest)))
           (make-sure-vm-is-ready vm rt)
@@ -175,7 +175,7 @@
           (lambda ()
             (vm-start vm #:max-vms 1))
           (lambda ()
-            (extract-installed (vm-remote vm config) vm))
+            (extract-installed (vm-remote vm config machine-independent?) vm))
           (lambda ()
             (vm-stop vm))))]))
 
