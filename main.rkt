@@ -137,7 +137,7 @@
          ;; If not #f, bytecode is compiled as machine-independent
          ;; in built packages:
          #:compile-any? [machine-independent? #f]
-         
+
          ;; Steps that you want to include; you can skip steps
          ;; at the beginning if you know they're already done, and
          ;; you can skip tests at the end if you don't want them:
@@ -170,6 +170,10 @@
 
          ;; Timeout in seconds for any one package or step:
          #:timeout [timeout 600]
+
+         ;; If not #f, determines the `--jobs` argument to `raco setup`,
+         ;; `raco pkg install`, and/or `raco test`:
+         #:jobs [jobs #f]
 
          ;; Callback for the case that no packages have changed
          ;; (useful for early exit)
@@ -237,6 +241,15 @@
   (define config (make-config timeout
                               server-port
                               server-dir))
+
+  (define job-flags (cond
+                      [jobs
+                       (unless (exact-positive-integer? jobs)
+                         (raise-argument-error 'build-pkgs
+                                               "(or/c exact-positive-integer? #f)"
+                                               jobs))
+                       (format " --jobs ~a" jobs)]
+                      [else ""]))
 
   (define rx:txt #rx"[.]txt$")
   (define (txt? f)
@@ -726,7 +739,7 @@
        (define ok?
          (and
           ;; Try to install:
-          (ssh-racket vm rt " -l- raco pkg install -u --auto"
+          (ssh-racket vm rt " -l- raco pkg install" job-flags " -u --auto"
                       (if one-pkg "" " --fail-fast")
                       " " pkgs-str
                       #:mode 'result
@@ -862,8 +875,8 @@
        (define test-ok?
          (ssh #:show-time? #t
               rt (cd-racket vm)
-              " && bin/racket" (MCR vm) " -l- raco pkg install -u --auto " pkgs-str
-              " && bin/racket" (MCR vm) " -l- raco test --drdr --package " pkgs-str
+              " && bin/racket" (MCR vm) " -l- raco pkg install" job-flags " -u --auto " pkgs-str
+              " && bin/racket" (MCR vm) " -l- raco test" job-flags " --drdr --package " pkgs-str
               #:mode 'result
               #:success-log test-success-dest
               #:failure-log test-failure-dest))
@@ -1239,14 +1252,14 @@
               ;; assume that `--sync-docs-only` is available:
               (ssh #:show-time? #t
                    rt (cd-racket vm)
-                   " && bin/raco pkg install -i --auto"
+                   " && bin/raco pkg install" job-flags " -i --auto"
                    " " (apply ~a #:separator " " no-conflict-doc-pkg-list))]
              [else
               ;; Use faster and more careful mode
-              (ssh-racket vm rt " -l- raco pkg install --no-setup -i --auto"
+              (ssh-racket vm rt " -l- raco pkg install" job-flags " --no-setup -i --auto"
                           " " (apply ~a #:separator " " no-conflict-doc-pkg-list))
-              (ssh-racket vm rt " -l- raco setup -n --no-pkg-deps --sync-docs-only")
-              (ssh-racket vm rt " -l- raco setup --only --doc-index")]))
+              (ssh-racket vm rt " -l- raco setup" job-flags " -n --no-pkg-deps --sync-docs-only")
+              (ssh-racket vm rt " -l- raco setup" job-flags " --only --doc-index")]))
          (ssh rt (cd-racket vm)
               " && tar zcf ../all-doc.tgz doc")
          (scp rt (at-remote rt (~a (vm-dir vm) "/all-doc.tgz"))

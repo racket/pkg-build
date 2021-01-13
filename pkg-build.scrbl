@@ -41,8 +41,8 @@ possible.
 
 First, install @hyperlink["https://www.docker.com/"]{Docker}. As long
 as @exec{docker} is in your path, that may be all you need, because
-suitable starting images @tt{racket/pkg-build-deps} and/or
-@tt{racket/pkg-build-deps-min} can be downloaded automatically by
+suitable starting images @tt{racket/pkg-build:pkg-build-deps} and/or
+@tt{racket/pkg-build:pkg-build-deps-min} can be downloaded automatically by
 Docker. See @secref["starting-image"] for more information about the
 content of a suitable starting image.
 
@@ -274,6 +274,7 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
           [#:timeout timeout real? 600]
+          [#:jobs jobs (or/c #f exact-positive-integer?) #f]
 
           [#:on-empty-pkg-updates on-empty-pkg-updates (-> any) void]
          
@@ -385,6 +386,11 @@ Additional configuration options:
 
    @item{@racket[timeout] --- Timeout in seconds for any one package
          or step.}
+
+   @item{@racket[jobs] --- If not @racket[#f], supplied with
+         @DFlag{jobs} to @exec{raco pkg install}, @exec{raco setup},
+         and/or @exec{raco test} to configure the number of concurrent
+         jobs that run.}
 
    @item{@racket[on-empty-pkg-updates] --- A thunk that is called in the
          case that no packages need to be rebuilt.}
