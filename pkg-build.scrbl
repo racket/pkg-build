@@ -274,6 +274,7 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
 
           [#:timeout timeout real? 600]
+          [#:test-timeout test-timeout (or/c #f real?) #f]
           [#:jobs jobs (or/c #f exact-positive-integer?) #f]
 
           [#:on-empty-pkg-updates on-empty-pkg-updates (-> any) void]
@@ -386,6 +387,10 @@ Additional configuration options:
 
    @item{@racket[timeout] --- Timeout in seconds for any one package
          or step.}
+
+   @item{@racket[test-timeout] --- If not @racket[#f], supplied with
+         @DFlag{timeout} to @exec{raco test} to configure the default
+         testing timeout.}
 
    @item{@racket[jobs] --- If not @racket[#f], supplied with
          @DFlag{jobs} to @exec{raco pkg install}, @exec{raco setup},
