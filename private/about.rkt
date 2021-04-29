@@ -212,7 +212,14 @@ builds of GMP and MPFR. You can see that dependency declaration in the
 
                     @pre{  @literal-url{https://github.com/racket/math/blob/master/math-lib/info.rkt}}
 
-                    @p{}
+                    @p{Other example packages are
+@tt{"draw-x86_64-linux-natipkg-3"}, which includes Cairo and Pango
+builds, and @tt{"gui-x86_64-linux-natipkg"}, which includes a Gtk
+build. These natipkg builds are not better than the ones that are
+normally part of a Linux installation---in fact, they tend to be
+compiled in a way that supports fewer features---but they can be
+installed in a relatively minimal Linux installation for purposes like
+the package-build service.}
 
                     @p{If your package depends on a native
 library, then you currently have two main options:}
