@@ -18,6 +18,7 @@
          "private/config.rkt"
          "private/vm.rkt"
          "private/download.rkt"
+         "private/same-checksums.rkt"
          "private/union-find.rkt"
          "private/thread.rkt"
          "private/status.rkt"
@@ -351,7 +352,15 @@
 	 #:exists 'truncate
 	 (lambda (o)
 	   (write-string v o)
-	   (newline o))))))
+	   (newline o)))))
+
+    ;; Check that archived packages are consistent with the snapshot catalog
+    ;; --- that is, that archiving has not changed checksums, which would
+    ;; be bad for running package updates in a snapshot installation
+    (status "Checking archive consistency with snapshot catalog\n")
+    (check-same-checksums snapshot-catalog
+                          (build-path archive-dir "catalog")
+                          pkgs-for-version))
 
   (define snapshot-pkg-names
     (parameterize ([current-pkg-catalogs (list (string->url snapshot-catalog))])
