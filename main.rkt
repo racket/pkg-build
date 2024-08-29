@@ -152,6 +152,9 @@
          ;; Run tests?
          #:run-tests? [run-tests? #t]
 
+         ;; Rebuild if there's no test record?
+         #:ensure-tests? [ensure-tests? run-tests?]
+
          ;; Include catalog of built packages in the site?
          #:built-at-site? [built-at-site? #f]
 
@@ -489,7 +492,10 @@
 			  (set-member? failed-pkgs pkg)
 			  (and
 			   (file-exists? (pkg-zip-file pkg))
-			   (file-exists? (pkg-zip-checksum-file pkg)))))))
+			   (file-exists? (pkg-zip-checksum-file pkg))
+                           (or (not ensure-tests?)
+                               (file-exists? (pkg-test-success-dest pkg))
+                               (file-exists? (pkg-test-failure-dest pkg))))))))
         pkg)
      (for/set ([pkg (in-list force-pkg-names)]
 	       #:when (set-member? all-pkgs pkg))

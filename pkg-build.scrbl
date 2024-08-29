@@ -281,7 +281,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
          
           [#:install-doc-list-file install-doc-list-file (or/c #f path-string?) #f]
 
-          [#:run-tests? run-tests? any/c t]
+          [#:run-tests? run-tests? any/c #t]
+          [#:ensure-tests? ensure-tests? any/c run-tests?]
 
           [#:built-at-site? built-at-site? any/c #f]
 
@@ -407,6 +408,9 @@ Additional configuration options:
 
    @item{@racket[run-tests?] --- Determines whether each package's
          tests are run after building the package.}
+
+   @item{@racket[ensure-tests?] --- Determines whether a package
+         is rebuild if there is no record test result.}
 
    @item{@racket[built-at-site?] --- Determines whether to include a
          catalog of built packages in an assembled site.}
