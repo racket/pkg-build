@@ -168,12 +168,10 @@
                      'ip)
           #:user (vm-user vm)
           #:env (append
-                 (vm-env vm)
                  (list (cons "PLTUSERHOME"
                              (~a (vm-dir vm) "/user"))
                        (cons "PLT_PKG_BUILD_SERVICE" "1")
                        (cons "CI" "true")
-                       (cons "PLTSTDERR" "debug@pkg error")                         
                        (cons "PLT_INFO_ALLOW_VARS"
                              (string-append
                               (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
@@ -182,7 +180,8 @@
                  (if machine-independent?
                      (list
                       (cons "PLTCOMPILEDROOTS" (string-append (vm-dir vm) "/zo:")))
-                     null))
+                     null)
+                 (vm-env vm))
           #:shell (vm-shell vm)
           #:key (and (vm-vbox? vm)
                      (vm-vbox-ssh-key vm))
