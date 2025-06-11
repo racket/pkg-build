@@ -164,7 +164,8 @@
              (unless (null? extra-packages)
                (fprintf o "RUN rm -r ~a/catalogs/archive" (q (vm-dir vm))))))
           (docker-build #:content build-dir
-                        #:name (vm-name vm))
+                        #:name (vm-name vm)
+                        #:platform (vm-docker-platform vm))
           (status "Container built as ~a\n" (docker-image-id #:name (vm-name vm))))
         (lambda ()
           (delete-directory/files build-dir)))

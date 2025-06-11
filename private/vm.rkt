@@ -47,7 +47,7 @@
 
 (struct vm (name host user dir env shell minimal-variant))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
-(struct vm-docker vm (from-image memory-mb swap-mb))
+(struct vm-docker vm (from-image memory-mb swap-mb platform))
 
 (define (complete-as-unix-path? dir)
   (complete-path? (bytes->path (string->bytes/utf-8 dir) 'unix)))
@@ -104,10 +104,13 @@
          ;; Limit on "real" memory available to the container in megabytes:
          #:memory-mb [memory-mb  #f]
          ;; Amount of additional swap space available, defaults to `memory-mb`:
-         #:swap-mb [swap-mb #f])
+         #:swap-mb [swap-mb #f]
+         ;; Platform, which normally should be `linux/amd64" is specified
+         #:platform [platform #f])
   (vm-docker name name "" dir env shell minimal-variant
              from-image
-             memory-mb swap-mb))
+             memory-mb swap-mb
+             platform))
 
 (define (check-distinct-vm-names vms)
   (let loop ([names #hash()] [vms vms])
@@ -198,6 +201,7 @@
     [(vm-docker? vm)
      (docker-create #:name (vm-name vm)
                     #:image-name (vm-name vm)
+                    #:platform (vm-docker-platform vm)
                     #:volumes (list
                                (list (config-server-dir config)
                                      (format "~a/catalogs" (vm-dir vm))
