@@ -32,7 +32,8 @@
                            #:shell (listof string?)
                            #:minimal-variant (or/c #f vm?)
                            #:memory-mb (or/c #f exact-nonnegative-integer?)
-                           #:swap-mb (or/c #f exact-nonnegative-integer?))
+                           #:swap-mb (or/c #f exact-nonnegative-integer?)
+                           #:platform (or/c #f string?))
                           vm?)])
          q
          cd-racket
