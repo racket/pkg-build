@@ -1,24 +1,35 @@
 #lang racket/base
 (require pkg-build
-         racket/runtime-path)
+         racket/runtime-path
+         racket/format)
 
 ;; Don't run as a test:
 (module test racket/base)
 
 (define-runtime-path workdir "workdir")
 
+(define fallback-arch
+  (case (system-type 'arch)
+    [(aarch64) 'x86_64]
+    [else #f]))
+
+(define vers "8.17")
+
 (module+ main
   (build-pkgs
    #:work-dir workdir
-   #:snapshot-url "https://mirror.racket-lang.org/releases/7.9/"
+   #:snapshot-url (~a "https://mirror.racket-lang.org/releases/" vers "/")
 
-   #:installer-name "racket-7.9-x86_64-linux-natipkg.sh"
+   #:installer-name (~a "racket-" vers "-" (system-type 'arch) "-linux-natipkg-pkg-build.sh")
+   #:fallback-installer-name (and fallback-arch
+                                  (~a "racket-" vers "-" fallback-arch "-linux-natipkg-pkg-build.sh"))
 
-   #:pkgs-for-version "7.9"
+   #:compile-any? #t ; need to be consistent with the installer
+
+   #:pkgs-for-version vers
    
    #:extra-packages '("main-distribution-test")
 
-   #:summary-omit-pkgs bin-pkgs
    #:built-at-site? #t
    #:site-url "https://pkg-build.racket-lang.org"
    
@@ -41,13 +52,22 @@
 (define (make-docker-vms name)
   (docker-vm
    #:name name
-   #:from-image "racket/pkg-build:pkg-build-deps"
+   #:from-image (~a "racket/pkg-build:deps-" (system-type 'arch))
    #:env test-env
    #:shell xvfb-shell
    #:memory-mb memory-mb
    #:minimal-variant (docker-vm #:name (string-append name "-min")
-                                #:from-image "racket/pkg-build:pkg-build-deps-min"
-                                #:memory-mb memory-mb)))
+                                #:from-image (~a "racket/pkg-build:deps-min-" (system-type 'arch))
+                                #:memory-mb memory-mb)
+   #:fallback-variant (and fallback-arch
+                           (docker-vm #:name (string-append name "-fallback")
+                                      #:from-image (~a "racket/pkg-build:deps-" fallback-arch)
+                                      #:platform (case fallback-arch
+                                                   [(x86_64) "linux/amd64"]
+                                                   [else "unknown fallabck platform"])
+                                      #:env test-env
+                                      #:shell xvfb-shell
+                                      #:memory-mb memory-mb))))
 
 ;; Some packages may depend on this, since pkg-build.racket-lang.org
 ;; defines it:
@@ -57,28 +77,3 @@
 ;; Use `xvfb-run` on the non-minimal VM to allow GUI programs to work:
 (define xvfb-shell
   '("/usr/bin/xvfb-run" "-n" "1" "/bin/sh" "-c"))
-
-;; Omitting these cleans up the summarry:
-(define bin-pkgs
-  (list "com-win32-i386" "com-win32-x86_64"
-        "db-ppc-macosx" "db-win32-i386" "db-win32-x86_64"
-        "db-x86_64-linux-natipkg"
-        "draw-i386-macosx" "draw-i386-macosx-2"
-        "draw-ppc-macosx" "draw-ppc-macosx-2"
-        "draw-win32-i386" "draw-win32-i386-2"
-        "draw-win32-x86_64" "draw-win32-x86_64-2"
-        "draw-x86_64-macosx" "draw-x86_64-macosx-2"
-        "draw-x86_64-linux-natipkg-2"
-        "draw-ttf-x86_64-linux-natipkg" "draw-x11-x86_64-linux-natipkg"
-        "gui-i386-macosx" "gui-ppc-macosx" "gui-win32-i386"
-        "gui-win32-x86_64" "gui-x86_64-macosx"
-        "gui-x86_64-linux-natipkg"
-        "math-i386-macosx" "math-ppc-macosx" "math-win32-i386"
-        "math-win32-x86_64" "math-x86_64-macosx"
-        "math-x86_64-linux-natipkg"
-        "racket-win32-i386" "racket-win32-i386-2"
-        "racket-win32-x86_64" "racket-win32-x86_64-2"
-	"racket-x86_64-macosx-2" "racket-i386-macosx-2"
-	"racket-ppc-macosx-2"
-        "racket-x86_64-linux-natipkg-2"))
-

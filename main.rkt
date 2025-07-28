@@ -24,15 +24,18 @@
          "private/status.rkt"
          "private/extract-doc.rkt"
          "private/summary.rkt"
-         "private/install-step.rkt")
+         "private/install-step.rkt"
+         "private/bin-pkgs.rkt")
 
 (provide vbox-vm
          docker-vm
          vm?
-         
+
          build-pkgs
-         
-         steps-in)
+
+         steps-in
+
+         main-dist-bin-pkgs)
 
 ;; ----------------------------------------
 
@@ -108,8 +111,12 @@
          ;; one of these must be provided
          #:installer-name [given-installer-name #f]
          #:installer-platform-name [installer-platform-name #f]
+         ;; Installers to use for a fallback VM:
+         #:fallback-installer-name [given-fallback-installer-name #f]
+         #:fallback-installer-platform-name [fallback-installer-platform-name #f]
 
-         ;; VirtualBox VMs (created by `vbox-vm`), at least one:
+         ;; Docker or VirtualBox VMs (created by `docker-vm` or `vbox-vm`),
+         ;; at least one:
          #:vms vms
 
          ;; Catalogs of packages to build (via an archive):
@@ -136,7 +143,8 @@
          #:only-sys+subpath [only-platform #f]
 
          ;; If not #f, bytecode is compiled as machine-independent
-         ;; in built packages:
+         ;; in built packages; this needs to be consistent with the
+         ;; selected installers:
          #:compile-any? [machine-independent? #f]
 
          ;; Steps that you want to include; you can skip steps
@@ -170,7 +178,7 @@
          #:compress-site? [compress-site? #t]
 
          ;; Omit specified packages from the summary:
-         #:summary-omit-pkgs [summary-omit-pkgs null]
+         #:summary-omit-pkgs [summary-omit-pkgs main-dist-bin-pkgs]
 
          ;; Timeout in seconds for any one package or step:
          #:timeout [timeout 600]
@@ -206,6 +214,13 @@
   (when (and given-installer-name
              installer-platform-name)
     (error 'build-pkgs "only one of #:installer-platform-name and #:installer-name can be provided as a string"))
+  (when (ormap vm-fallback-variant vms)
+    (unless (or given-fallback-installer-name
+                fallback-installer-platform-name)
+      (error 'build-pkgs "with a fallback VM, either #:fallback-installer-platform-name or #:fallback-installer-name must be provided")))
+  (when (and given-fallback-installer-name
+             fallback-installer-platform-name)
+    (error 'build-pkgs "only one of #:fallback-installer-platform-name and #:fallback-installer-name can be provided as a string"))
 
   (check-distinct-vm-names vms)
 
@@ -230,8 +245,9 @@
   (define built-dir (build-path server-dir "built"))
   (define built-pkgs-dir (build-path built-dir "pkgs/"))
   (define built-catalog-dir (build-path built-dir "catalog"))
-  (define fail-dir (build-path built-dir "fail"))
-  (define min-fail-dir (build-path built-dir "min-fail"))
+  (define min-fail-dir (build-path built-dir "min-fail"))   ; failures for first try: minimal
+  (define arch-fail-dir (build-path built-dir "arch-fail")) ; failures for second try: non-minimal, but preferred
+  (define fail-dir (build-path built-dir "fail"))           ; last-change failures: non-minimal fallback
   (define success-dir (build-path built-dir "success"))
   (define install-success-dir (build-path built-dir "install"))
   (define deps-fail-dir (build-path built-dir "deps"))
@@ -296,7 +312,8 @@
      #:exists 'truncate/replace
      (lambda (o) (write table o) (newline o))))
 
-  (define installer-name
+  (define (find-installer-name given-installer-name
+                               installer-platform-name)
     (cond
       [given-installer-name given-installer-name]
       [else (hash-ref
@@ -304,15 +321,37 @@
               installer-table-path
               read)
              installer-platform-name)]))
+  (define installer-name
+    (find-installer-name given-installer-name
+                         installer-platform-name))
   (substatus "Installer is ~a\n" installer-name)
 
+  (define fallback-installer-name
+    (and (or given-fallback-installer-name
+             fallback-installer-platform-name)
+         (find-installer-name given-fallback-installer-name
+                              fallback-installer-platform-name)))
+  (when fallback-installer-name
+    (substatus "Fallback installer is ~a\n" fallback-installer-name))
+
+  (define install-uuids-file "install-uuids.rktd")
+  
   ;; ----------------------------------------
   (unless skip-download?
     (status "Downloading installer ~a\n" installer-name)
     (download-installer snapshot-url installer-dir installer-name substatus
+                        "status.rktd"
+                        #:clean? #t
                         (lambda ()
-                          (when (file-exists? "install-uuids.rktd")
-                            (delete-file "install-uuids.rktd")))))
+                          (when (file-exists? install-uuids-file)
+                            (delete-file install-uuids-file))))
+    (when fallback-installer-name
+      (status "Downloading installer ~a\n" fallback-installer-name)
+      (download-installer snapshot-url installer-dir fallback-installer-name substatus
+                          "fallback-status.rktd"
+                          (lambda ()
+                            (when (file-exists? install-uuids-file)
+                              (delete-file install-uuids-file))))))
 
   ;; ----------------------------------------
 
@@ -401,6 +440,8 @@
                     config
                     installer-dir
                     installer-name
+                    fallback-installer-name
+                    install-uuids-file
                     archive-dir
                     extra-packages
                     work-dir
@@ -461,8 +502,8 @@
   (define (pkg-ring pkg) (or (hash-ref (hash-ref pkg-details pkg) 'ring #f) 0))
   (define (pkg-zip-file pkg) (build-path built-pkgs-dir (~a pkg ".zip")))
   (define (pkg-zip-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".zip.CHECKSUM")))
-  (define (pkg-failure-dest pkg #:minimal? [min? #f])
-    (build-path (if min? min-fail-dir fail-dir) (txt pkg)))
+  (define (pkg-failure-dest pkg #:minimal? [min? #f] #:has-fallback? [has-fallback? #f])
+    (build-path (if min? min-fail-dir (if has-fallback? arch-fail-dir fail-dir)) (txt pkg)))
   (define (pkg-archive-failure-dest pkg) (build-path archive-fail-dir (txt pkg)))
   (define (pkg-test-success-dest pkg) (build-path test-success-dir (txt pkg)))
   (define (pkg-test-failure-dest pkg) (build-path test-fail-dir (txt pkg)))
@@ -535,12 +576,14 @@
     (define checksum-file (pkg-checksum-file pkg))
     (define zip-file (pkg-zip-file pkg))
     (define zip-checksum-file (pkg-zip-checksum-file pkg))
-    (define failure-dest (pkg-failure-dest pkg))
     (define min-failure-dest (pkg-failure-dest pkg #:minimal? #t))
+    (define arch-failure-dest (pkg-failure-dest pkg #:has-fallback? #t))
+    (define failure-dest (pkg-failure-dest pkg))
     (when (file-exists? zip-file) (delete-file zip-file))
     (when (file-exists? zip-checksum-file) (delete-file zip-checksum-file))
-    (when (file-exists? failure-dest) (delete-file failure-dest))
     (when (file-exists? min-failure-dest) (delete-file min-failure-dest))
+    (when (file-exists? arch-failure-dest) (delete-file arch-failure-dest))
+    (when (file-exists? failure-dest) (delete-file failure-dest))
     (call-with-output-file*
      checksum-file
      #:exists 'truncate/replace
@@ -670,8 +713,9 @@
 
   ;; ----------------------------------------
   (make-directory* (build-path built-dir "adds"))
-  (make-directory* fail-dir)
   (make-directory* min-fail-dir)
+  (make-directory* arch-fail-dir)
+  (make-directory* fail-dir)
   (make-directory* success-dir)
   (make-directory* install-success-dir)
   (make-directory* deps-fail-dir)
@@ -731,12 +775,18 @@
     (values flat-pkgs one-pkg pkgs-str))
 
   ;; Build one package or a group of packages:
-  (define (build-pkgs vm pkgs #:minimal? [minimal? #f])
+  (define (build-pkgs vm pkgs
+                      #:minimal? [minimal? #f]
+                      #:has-fallback? [has-fallback? #f]
+                      #:is-fallback? [is-fallback? #f])
     (define-values (flat-pkgs one-pkg pkgs-str)
-      (status-pkgs pkgs "Building"))
+      (status-pkgs pkgs (cond
+                          [minimal? "Building"]
+                          [is-fallback? "Building [fallback]"]
+                          [else "Building [non-minimal]"])))
 
     (define failure-dest (and one-pkg
-                              (pkg-failure-dest (car flat-pkgs) #:minimal? minimal?)))
+                              (pkg-failure-dest (car flat-pkgs) #:minimal? minimal? #:has-fallback? has-fallback?)))
     (define install-success-dest (build-path install-success-dir
                                              (txt (car flat-pkgs))))
 
@@ -832,6 +882,9 @@
            (when (and minimal?
                       (file-exists? (pkg-failure-dest pkg #:minimal? #t)))
              (delete-file (pkg-failure-dest pkg  #:minimal? #t)))
+           (when (and has-fallback?
+                      (file-exists? (pkg-failure-dest pkg #:has-fallback? #t)))
+             (delete-file (pkg-failure-dest pkg  #:has-fallback? #t)))
            (when (and deps-ok? (file-exists? (pkg-deps-failure-dest pkg)))
              (delete-file (pkg-deps-failure-dest pkg)))
            (when (file-exists? (pkg-test-failure-dest pkg))
@@ -864,7 +917,7 @@
              (when (list? one-pkg)
                (unless (equal? pkg (car one-pkg))
                  (copy-file failure-dest
-                            (pkg-failure-dest pkg #:minimal? minimal?)
+                            (pkg-failure-dest pkg #:minimal? minimal? #:has-fallback? has-fallback?)
                             #t)))
              (save-checksum pkg))
            ;; Keep any docs that might have been built:
@@ -939,23 +992,38 @@
     (parameterize ([current-ssh-verbose #t])
       (define len (length pkgs))
       (define has-minimal? (and (vm-minimal-variant vm) #t))
-      (define ok? (and (len . <= . max-build-together)
-                       (or
-                        ;; Here's the main build attempt:
-                        (build-pkgs (if has-minimal?
-                                        (vm-minimal-variant vm)
-                                        vm)
-                                    pkgs
-                                    #:minimal? has-minimal?)
-                        ;; ... but if that was minimal, try again
-                        ;; with the non-minimal variant:
-                        (and has-minimal?
-                             (build-pkgs vm pkgs #:minimal? #f)))))
-      (when (and ok? run-tests?)
-        ;; Testing always uses the non-minimal variant:
-        (test-pkgs vm pkgs))
+      (define has-fallback? (and (vm-fallback-variant vm) #t))
+      (define ok (and (len . <= . max-build-together)
+                      (or
+                       ;; Here's the main build attempt:
+                       (and (build-pkgs (if has-minimal?
+                                            (vm-minimal-variant vm)
+                                            vm)
+                                        pkgs
+                                        #:minimal? has-minimal?
+                                        #:has-fallback? has-fallback?)
+                            (if has-minimal? 'minmal 'arch))
+                       ;; ... but if that was minimal, try again
+                       ;; with the non-minimal variant:
+                       (and has-minimal?
+                            (build-pkgs vm pkgs
+                                        #:minimal? #f
+                                        #:has-fallback? has-fallback?)
+                            'arch)
+                       ;; ... and if the is a fallback, try again
+                       ;; with the fallback variant:
+                       (and has-fallback?
+                            (build-pkgs (vm-fallback-variant vm) pkgs
+                                        #:minimal? #f
+                                        #:has-fallback? #f
+                                        #:is-fallback? #t)
+                            'fallback))))
+      (when (and ok run-tests?)
+        ;; Testing always uses the non-minimal variant, but it uses the
+        ;; fallback platform if that was needed to build
+        (test-pkgs (if (eq? ok 'fallback) (vm-fallback-variant vm) vm) pkgs))
       (flush-chunk-output)
-      (unless (or ok? (= 1 len))
+      (unless (or ok (= 1 len))
         (define part (min (quotient len 2)
                           max-build-together))
         (build-pkg-set vm (take pkgs part))
@@ -1288,7 +1356,7 @@
               (ssh-racket vm rt " -l- raco setup" job-flags " -n --no-pkg-deps --sync-docs-only")
               (ssh-racket vm rt " -l- raco setup" job-flags " --only --doc-index")]))
          (ssh rt (cd-racket vm)
-              " && tar zcf ../all-doc.tgz doc")
+              " && mkdir -p doc && tar zcf ../all-doc.tgz doc")
          (scp rt (at-remote rt (~a (vm-dir vm) "/all-doc.tgz"))
               (build-path work-dir "all-doc.tgz"))))
      (lambda ()
@@ -1407,6 +1475,7 @@
         (define dep-status (more-status deps-fail-dir))
         (define test-status (more-status test-fail-dir test-success-dir))
         (define min-status (more-status min-fail-dir))
+        (define arch-status (more-status arch-fail-dir))
         (define adds (let ([adds-file (if (eq? status 'success)
                                           (pkg-adds-file pkg)
                                           (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg)))])
@@ -1441,6 +1510,8 @@
                                       (path->relative (build-path test-fail-dir (txt pkg))))
                'min-failure-log (and (eq? min-status 'failure)
                                      (path->relative (build-path min-fail-dir (txt pkg))))
+               'arch-failure-log (and (eq? arch-status 'failure)
+                                      (path->relative (build-path arch-fail-dir (txt pkg))))
                'docs (for/list ([doc (in-list docs)])
                        (define path (~a "doc/" (~a doc "@" pkg) "/index.html"))
                        (define (ok?) (directory-exists? (build-path doc-dir (~a doc "@" pkg)))) 

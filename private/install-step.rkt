@@ -21,13 +21,15 @@
                       config
                       installer-dir
                       installer-name
+                      fallback-installer-name
+                      install-uuids-file
                       archive-dir
                       extra-packages
                       work-dir
                       install-doc-list-file
                       machine-independent?)
   
-  (define (do-install ssh scp-to rt vm
+  (define (do-install ssh scp-to rt vm installer-name
                       #:filesystem-catalog? [filesystem-catalog? #f]
                       #:pre-pkg-install [pre-pkg-install void])
     (define there-dir (vm-dir vm))
@@ -86,13 +88,13 @@
     (ssh rt (cd-racket vm)
          " && bin/racket" MCR " ../pkg-adds.rkt --all > ../pkg-adds.rktd")
     (ssh rt (cd-racket vm)
-         " && tar zcf ../install-doc.tgz doc")
+         " && mkdir -p doc && tar zcf ../install-doc.tgz doc")
     (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))
          (build-path work-dir "install-adds.rktd"))
     (scp rt (at-remote rt (~a there-dir "/install-doc.tgz"))
          (build-path work-dir "install-doc.tgz")))
   
-  (define (install vm
+  (define (install vm installer-name
                    #:extract-installed? [extract-installed? #f])
     (cond
       ;; VirtualBox mode
@@ -108,7 +110,7 @@
           (define (scp-to rt src dest)
             (scp rt src (at-remote rt dest)))
           (make-sure-vm-is-ready vm rt)
-          (do-install ssh scp-to rt vm)
+          (do-install ssh scp-to rt vm installer-name)
           (when extract-installed?
             (extract-installed rt vm)))
         (lambda ()
@@ -156,7 +158,7 @@
                (define-values (base name dir?) (split-path here))
                (copy-file here (build-path build-dir name))
                (fprintf o "COPY ~a ~a\n" name there))
-             (do-install build-ssh build-scp-to 'dummy-rt vm
+             (do-install build-ssh build-scp-to 'dummy-rt vm installer-name
                          #:filesystem-catalog? #t
                          #:pre-pkg-install
                          (lambda ()
@@ -180,12 +182,12 @@
           (lambda ()
             (vm-stop vm))))]))
 
-  (define (check-and-install vm #:extract-installed? [extract-installed? #f])
+  (define (check-and-install vm installer-name #:extract-installed? [extract-installed? #f])
     (define uuids (with-handlers ([exn:fail? (lambda (exn)
                                                (hash))])
                     (define ht
                       (call-with-input-file*
-                       (build-path work-dir "install-uuids.rktd")
+                       (build-path work-dir install-uuids-file)
                        read))
                     (if (hash? ht)
                         ht
@@ -205,19 +207,21 @@
                    (format " for ~a" (vm-vbox-installed-snapshot vm))
                    ""))]
       [else
-       (install vm #:extract-installed? extract-installed?)
+       (install vm installer-name #:extract-installed? extract-installed?)
        (define uuid (get-vm-id))
        (call-with-output-file*
-        (build-path work-dir "install-uuids.rktd")
+        (build-path work-dir install-uuids-file)
         #:exists 'truncate
         (lambda (o)
           (writeln (hash-set uuids key uuid) o)))]))
 
   (for ([vm (in-list vms)]
         [i (in-naturals)])
-    (check-and-install vm #:extract-installed? (zero? i))
+    (check-and-install vm installer-name #:extract-installed? (zero? i))
     (when (vm-minimal-variant vm)
-      (check-and-install (vm-minimal-variant vm))))
+      (check-and-install (vm-minimal-variant vm) installer-name))
+    (when (vm-fallback-variant vm)
+      (check-and-install (vm-fallback-variant vm) fallback-installer-name)))
 
   (when install-doc-list-file
     (call-with-output-file*

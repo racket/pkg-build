@@ -68,6 +68,7 @@
       (define dep-status (more-status 'dep-failure-log))
       (define test-status (more-status 'test-failure-log 'test-success-log))
       (define min-status (more-status 'min-failure-log))
+      (define arch-status (more-status 'arch-failure-log))
       (define docs (hash-ref ht 'docs))
       (define author (hash-ref ht 'author))
       (define conflicts-log (hash-ref ht 'conflicts-log))
@@ -104,7 +105,8 @@
                           "brake"]
                          [(eq? test-status 'failure)
                           "yield"]
-                         [(eq? min-status 'failure)
+                         [(or (eq? min-status 'failure)
+                              (eq? arch-status 'failure))
                           "ok"]
                          [else "go"])]
                        [else "unknown"])
@@ -133,6 +135,12 @@
                        (list
                         (a href: (hash-ref ht 'test-success-log)
                            "no test failures"))]
+                      [else null])
+                    (case arch-status
+                      [(failure)
+                       (list
+                        (a href: (hash-ref ht 'arch-failure-log)
+                           "architecture dependency"))]
                       [else null])
                     (case min-status
                       [(failure)

@@ -24,13 +24,15 @@
                          #:shell (listof string?)
                          #:init-shapshot string?
                          #:installed-shapshot string?
-                         #:minimal-variant (or/c #f vm?))
+                         #:minimal-variant (or/c #f vm?)
+                         #:fallback-variant (or/c #f vm?))
                         vm?)]
           [docker-vm (->* (#:name string? #:from-image string?)
                           (#:dir (and/c string? complete-as-unix-path?)
                            #:env (listof (cons/c string? string?))
                            #:shell (listof string?)
                            #:minimal-variant (or/c #f vm?)
+                           #:fallback-variant (or/c #f vm?)
                            #:memory-mb (or/c #f exact-nonnegative-integer?)
                            #:swap-mb (or/c #f exact-nonnegative-integer?)
                            #:platform (or/c #f string?))
@@ -46,7 +48,7 @@
          vm-start
          vm-stop)
 
-(struct vm (name host user dir env shell minimal-variant))
+(struct vm (name host user dir env shell minimal-variant fallback-variant))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
 (struct vm-docker vm (from-image memory-mb swap-mb platform))
 
@@ -80,18 +82,33 @@
          ;; and before building any package:
          #:installed-shapshot [installed-snapshot "installed"]
          ;; If not #f, a `vm` that is more constrained and will be
-         ;; tried as an installation target before this one:
+         ;; tried as an installation target before this one, and this
+         ;; one will be used only of the minimal variant fails;
+         ;; *does not* recur to nested minimal and fallback variants:
          #:minimal-variant [minimal-variant #f]
+         ;; If not #f, a `vm` (perhaps for a different architecture) that
+         ;; will be tried if this one fails (with no recur):
+         #:fallback-variant [fallback-variant #f]
+         ;; Limit on "real" memory available to the container in megabytes:
          ;; Path to ssh key to use to connect to this VM:
          ;; #f indicates that ssh's defaults are used
          #:ssh-key [ssh-key #f])
-  (vm-vbox name host user dir env shell minimal-variant
+  (vm-vbox name host user dir env shell minimal-variant fallback-variant
            init-snapshot installed-snapshot ssh-key))
+
+;; Suggsted base Docker image names, available from Docker Hub:
+;;
+;;   racket/pkg-build:deps             - for linux/amd64 and linux/arm64/v8
+;;   racket/pkg-build:deps-min         - for linux/amd64 and linux/arm64/v8
+;;   racket/pkg-build:deps-x86_64      - for linux/amd64 only
+;;   racket/pkg-build:deps-min-x86_64  - for linux/amd64 only
+;;   racket/pkg-build:deps-aarch64     - for linux/arm64/v8 only
+;;   racket/pkg-build:deps-min-aarch64 - for linux/arm64/v8 only
 
 (define (docker-vm
          ;; Docker image label:
          #:name name
-         ;; Base image:
+         ;; Base image (see suggetsed list above):
          #:from-image from-image
          ;; Working directory in image:
          #:dir [dir "/home/root/"]
@@ -100,15 +117,25 @@
          ;; Command to run a single-stringa shell command
          #:shell [shell '("/bin/sh" "-c")]
          ;; If not #f, a `vm` that is more constrained and will be
-         ;; tried as an installation target before this one:
+         ;; tried as an installation target before this one, and this
+         ;; one will be used only of the minimal variant fails;
+         ;; *does not* recur to nested minimal and fallback variants:
          #:minimal-variant [minimal-variant #f]
+         ;; If not #f, a `vm` (perhaps for a different architecture) that
+         ;; will be tried if this one fails (with no recur):
+         #:fallback-variant [fallback-variant #f]
          ;; Limit on "real" memory available to the container in megabytes:
          #:memory-mb [memory-mb  #f]
          ;; Amount of additional swap space available, defaults to `memory-mb`:
          #:swap-mb [swap-mb #f]
-         ;; Platform, which normally should be `linux/amd64" is specified
+         ;; Optional platform, which normally should be `linux/amd64" or "linux/arm64/v8";
+         ;; needs to be specified if it doesn't match the host (i.e., emulation
+         ;; is available at the Docker level); beware that different platforms cannot
+         ;; use the same image name, so for multiple platforms, used images like 
+         ;; "racket/pkg-build:deps-x86_64" and "racket/pkg-build:deps-aarch_64" instead
+         ;; of the tags without an architecture
          #:platform [platform #f])
-  (vm-docker name name "" dir env shell minimal-variant
+  (vm-docker name name "" dir env shell minimal-variant fallback-variant
              from-image
              memory-mb swap-mb
              platform))
