@@ -11,7 +11,10 @@
 #  docker push racket/pkg-build:deps-min-aarch64
 #
 #
-FROM ubuntu:16.04
+FROM debian:buster
+RUN echo deb http://archive.debian.org/debian buster main > /etc/apt/sources.list
+RUN echo deb http://archive.debian.org/debian-security buster/updates main >> /etc/apt/sources.list
+RUN echo deb http://archive.debian.org/debian buster-updates main >> /etc/apt/sources.list
 RUN apt-get update -y
 RUN apt-get install ca-certificates tzdata -y
 ENTRYPOINT ["/bin/bash"]
