@@ -755,13 +755,13 @@
     #f)
   
   ;; Print status and munge a list-of-list-of-packages:
-  (define (status-pkgs pkgs action)
+  (define (status-pkgs pkgs pct action)
     (define flat-pkgs (flatten pkgs))
     ;; one-pkg can be a list in the case of mutual dependencies:
     (define one-pkg (and (= 1 (length pkgs)) (car pkgs)))
     (define pkgs-str (apply ~a #:separator " " flat-pkgs))
 
-    (status (~a (make-string 40 #\=) "\n"))
+    (status (~a (make-string 40 #\=) " " (floor (* 100 pct)) "%\n"))
     (if one-pkg
         (if (pair? one-pkg)
             (begin
@@ -775,15 +775,15 @@
     (values flat-pkgs one-pkg pkgs-str))
 
   ;; Build one package or a group of packages:
-  (define (build-pkgs vm pkgs
+  (define (build-pkgs vm pkgs pct
                       #:minimal? [minimal? #f]
                       #:has-fallback? [has-fallback? #f]
                       #:is-fallback? [is-fallback? #f])
     (define-values (flat-pkgs one-pkg pkgs-str)
-      (status-pkgs pkgs (cond
-                          [minimal? "Building"]
-                          [is-fallback? "Building [fallback]"]
-                          [else "Building [non-minimal]"])))
+      (status-pkgs pkgs pct (cond
+                              [minimal? "Building"]
+                              [is-fallback? "Building [fallback]"]
+                              [else "Building [non-minimal]"])))
 
     (define failure-dest (and one-pkg
                               (pkg-failure-dest (car flat-pkgs) #:minimal? minimal? #:has-fallback? has-fallback?)))
@@ -937,11 +937,11 @@
        (vm-stop vm))))
   
   ;; Test one package or a group of packages:
-  (define (test-pkgs vm pkgs)
+  (define (test-pkgs vm pkgs pct)
     ;; If we get interrupted or something goes wrong here, we may
     ;; leave a package in a built-but-not-tested state.
     (define-values (flat-pkgs one-pkg pkgs-str)
-      (status-pkgs pkgs "Testing"))
+      (status-pkgs pkgs pct "Testing"))
 
     (define test-success-dest (pkg-test-success-dest (car flat-pkgs)))
     (define test-failure-dest (pkg-test-failure-dest (car flat-pkgs)))
@@ -988,7 +988,7 @@
 
   ;; Build and test a group of packages, recurring on smaller groups
   ;; if the big group fails:
-  (define (build-pkg-set vm pkgs)
+  (define (build-pkg-set vm pkgs start-pct pkgs-pct)
     (parameterize ([current-ssh-verbose #t])
       (define len (length pkgs))
       (define has-minimal? (and (vm-minimal-variant vm) #t))
@@ -1000,20 +1000,21 @@
                                             (vm-minimal-variant vm)
                                             vm)
                                         pkgs
+                                        start-pct
                                         #:minimal? has-minimal?
                                         #:has-fallback? has-fallback?)
                             (if has-minimal? 'minmal 'arch))
                        ;; ... but if that was minimal, try again
                        ;; with the non-minimal variant:
                        (and has-minimal?
-                            (build-pkgs vm pkgs
+                            (build-pkgs vm pkgs start-pct
                                         #:minimal? #f
                                         #:has-fallback? has-fallback?)
                             'arch)
                        ;; ... and if the is a fallback, try again
                        ;; with the fallback variant:
                        (and has-fallback?
-                            (build-pkgs (vm-fallback-variant vm) pkgs
+                            (build-pkgs (vm-fallback-variant vm) pkgs start-pct
                                         #:minimal? #f
                                         #:has-fallback? #f
                                         #:is-fallback? #t)
@@ -1021,13 +1022,14 @@
       (when (and ok run-tests?)
         ;; Testing always uses the non-minimal variant, but it uses the
         ;; fallback platform if that was needed to build
-        (test-pkgs (if (eq? ok 'fallback) (vm-fallback-variant vm) vm) pkgs))
+        (test-pkgs (if (eq? ok 'fallback) (vm-fallback-variant vm) vm) pkgs start-pct))
       (flush-chunk-output)
       (unless (or ok (= 1 len))
         (define part (min (quotient len 2)
                           max-build-together))
-        (build-pkg-set vm (take pkgs part))
-        (build-pkg-set vm (drop pkgs part)))))
+        (define pre-pct (* (/ part (length pkgs)) pkgs-pct))
+        (build-pkg-set vm (take pkgs part) start-pct pre-pct)
+        (build-pkg-set vm (drop pkgs part) (+ start-pct pre-pct) (- pkgs-pct pre-pct)))))
 
   ;; Look for n packages whose dependencies are ready:
   (define (select-n n pkgs pending-pkgs)
@@ -1068,19 +1070,20 @@
     #:property prop:evt (lambda (r)
                           (wrap-evt (running-th r)
                                     (lambda (v) r))))
-  (define (start-running vm pkgs)
+  (define (start-running vm pkgs start-pct pkgs-pct)
     (define done?-box (box #f))
     (define t (thread/chunk-output
                (lambda ()
                  (break-enabled #t)
-                 (status "Sending to ~a~a:\n"
+                 (status "Sending to ~a~a (~a%):\n"
                          (vm-name vm)
                          (if (vm-minimal-variant vm)
                              (~a " / " (vm-name (vm-minimal-variant vm)))
-                             ""))
+                             "")
+                          (floor (* 100 start-pct)))
                  (show-list pkgs)
                  (flush-chunk-output)
-                 (build-pkg-set vm pkgs)
+                 (build-pkg-set vm pkgs start-pct pkgs-pct)
                  (set-box! done?-box #t))))
     (running vm pkgs t done?-box))
 
@@ -1099,11 +1102,15 @@
   ;; big:
   (define (build-all-pkgs pkgs)
     ;; pkgs is a list of string and lists (for mutual dependency)
+    (define total (length pkgs))
     (let loop ([pkgs pkgs]
                [pending-pkgs (multi-list->set pkgs)]
                [vms vms]
                [runnings null]
-               [error? #f])
+               ;; When a build fails external to the VM, stop
+               ;; farming out pkgs to VMs, but wait for current
+               ;; to complete
+               [error-running #f])
       (define (wait)
         (define r
           (with-handlers ([exn:break? (lambda (exn)
@@ -1115,7 +1122,8 @@
              #t
              (apply sync runnings))))
         (define r-vm (running-vm r))
-        (status "Got response from ~a~a\n"
+        (status "Got response ~afrom ~a~a\n"
+                (if (unbox (running-done?-box r)) "" "prematurely ")
                 (vm-name r-vm)
                 (if (vm-minimal-variant r-vm)
                     (~a " / " (vm-name (vm-minimal-variant r-vm)))
@@ -1124,11 +1132,15 @@
               (set-subtract pending-pkgs (multi-list->set (running-pkgs r)))
               (cons r-vm vms)
               (remq r runnings)
-              (or error? (not (unbox (running-done?-box r))))))
+              (or error-running (and (not (unbox (running-done?-box r)))
+                                     r))))
       (cond
-       [error?
+       [error-running
         (if (null? runnings)
-            (error "a build task ended prematurely")
+            (error (format (string-append "Stopping, because a build task ended prematurely outside of the VM\n"
+                                          "  task: ~s at ~a")
+                           (running-pkgs error-running)
+                           (vm-name (running-vm error-running))))
             (wait))]
        [(and (null? pkgs)
              (null? runnings))
@@ -1147,16 +1159,17 @@
           (loop (remove-ordered try-pkgs pkgs)
                 pending-pkgs
                 (cdr vms)
-                (cons (start-running (car vms) try-pkgs)
+                (cons (start-running (car vms) try-pkgs
+                                    (- 1 (/ (length pkgs) total)) (/ 1 total))
                       runnings)
-                error?)])])))
+                error-running)])])))
 
   ;; Build all of the out-of-date packages:
   (unless (or skip-build?
               (null? need-pkgs-list))
     (if (= 1 (length vms))
         ;; Sequential builds:
-        (build-pkg-set (car vms) need-pkgs-list)
+        (build-pkg-set (car vms) need-pkgs-list 0 1)
         ;; Parallel builds:
         (parameterize-break
          #f
