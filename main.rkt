@@ -761,15 +761,16 @@
     (define one-pkg (and (= 1 (length pkgs)) (car pkgs)))
     (define pkgs-str (apply ~a #:separator " " flat-pkgs))
 
-    (status (~a (make-string 40 #\=) " " (floor (* 100 pct)) "%\n"))
+    (define pct-str (~a " (" (floor (* 100 pct)) "%)"))
+    (status (~a (make-string 40 #\=) "\n"))
     (if one-pkg
         (if (pair? one-pkg)
             (begin
-              (status "~a mutually dependent packages:\n" action)
+              (status "~a mutually dependent packages~a:\n" action pct-str)
               (show-list one-pkg))
-            (status "~a ~a\n" action one-pkg))
+            (status "~a ~a~a\n" action one-pkg pct-str))
         (begin
-          (status "~a packages together:\n" action)
+          (status "~a packages together~a:\n" action pct-str)
           (show-list pkgs)))
     
     (values flat-pkgs one-pkg pkgs-str))
@@ -1187,7 +1188,11 @@
                 (define checksum-file (pkg-checksum-file pkg))
                 (and (file-exists? checksum-file)
                      (file-exists? (pkg-zip-file pkg))
-                     (file-exists? (pkg-zip-checksum-file pkg)))))
+                     (file-exists? (pkg-zip-checksum-file pkg))
+                     ;; omit packages that required the fallback VM, because we're
+                     ;; not using the fallback to assemble documentation; the docs
+                     ;; should still get salvaged (but that needs to be fixed)
+                     (not (file-exists?  (pkg-failure-dest pkg #:has-fallback? #t))))))
       pkg))
 
   ;; Table mapping package names (for all available packages) to adds
