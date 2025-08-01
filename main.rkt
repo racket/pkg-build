@@ -875,6 +875,18 @@
                         " " pkg
                         #:mode 'result
                         #:failure-log (and ok? failure-dest)))))
+       (define (fill-dumpster)
+         ;; Keep any docs that might have been built:
+         (for ([pkg (in-list flat-pkgs)])
+           (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip"))
+                dumpster-pkgs-dir
+                #:mode 'result)
+           (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
+                dumpster-pkgs-dir
+                #:mode 'result)
+           (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))
+                (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg))
+                #:mode 'result)))
        (cond
         [(and ok? doc-ok? (or deps-ok? one-pkg))
          (for ([pkg (in-list flat-pkgs)])
@@ -910,7 +922,9 @@
          (call-with-semaphore
           catalog-lock
           (lambda ()
-            (update-built-catalog flat-pkgs)))]
+            (update-built-catalog flat-pkgs)))
+         (when (and one-pkg is-fallback?)
+           (fill-dumpster))]
         [else
          (when one-pkg
            ;; Record failure (for all docs in a mutually dependent set):
@@ -921,17 +935,7 @@
                             (pkg-failure-dest pkg #:minimal? minimal? #:has-fallback? has-fallback?)
                             #t)))
              (save-checksum pkg))
-           ;; Keep any docs that might have been built:
-           (for ([pkg (in-list flat-pkgs)])
-             (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip"))
-                  dumpster-pkgs-dir
-                  #:mode 'result)
-             (scp rt (at-remote rt (~a there-dir "/built/" pkg ".zip.CHECKSUM"))
-                  dumpster-pkgs-dir
-                  #:mode 'result)
-             (scp rt (at-remote rt (~a there-dir "/pkg-adds.rktd"))
-                  (build-path dumpster-adds-dir (format "~a-adds.rktd" pkg))
-                  #:mode 'result)))
+           (fill-dumpster))
          (substatus "*** failed ***\n")])
        ok?)
      (lambda ()
@@ -1191,7 +1195,7 @@
                      (file-exists? (pkg-zip-checksum-file pkg))
                      ;; omit packages that required the fallback VM, because we're
                      ;; not using the fallback to assemble documentation; the docs
-                     ;; should still get salvaged (but that needs to be fixed)
+                     ;; should still get salvaged
                      (not (file-exists?  (pkg-failure-dest pkg #:has-fallback? #t))))))
       pkg))
 
