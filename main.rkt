@@ -174,7 +174,11 @@
          ;; means "the current release":
          #:site-starting-point [site-starting-point #f]
 
-         ;; Whether to generate "site.tgz" or "site.tar"
+         ;; In help text, whether the help text should describe the
+         ;; package-build process as one-time or periodic:
+         #:one-time-build? [one-time-build? #f]
+
+         ;; Whether to generate "site.tgz" or "site.tar":
          #:compress-site? [compress-site? #t]
 
          ;; Omit specified packages from the summary:
@@ -298,6 +302,11 @@
 
   (make-directory* work-dir)
 
+  (define (show-pkg-build-log-header)
+    (when site-url
+      (printf "For information about the package build service, see ~a\n"
+              (url->string (combine-url/relative (string->url site-url) "about.html")))))
+
   ;; ----------------------------------------
   (define installer-table-path (build-path work-dir "table.rktd"))
   (unless skip-download?
@@ -360,6 +369,7 @@
     (show-list (cons snapshot-catalog pkg-catalogs))
     (make-directory* archive-dir)
     (define archive-failures (make-hash))
+    (define start-seconds (current-seconds))
     (parameterize ([current-pkg-lookup-version pkgs-for-version])
       (pkg-catalog-archive archive-dir
                            (cons snapshot-catalog pkg-catalogs)
@@ -393,6 +403,10 @@
 	 (txt k)
 	 #:exists 'truncate
 	 (lambda (o)
+           (parameterize ([current-output-port o])
+             (show-pkg-build-log-header))
+           (fprintf o "Archiving attempt started at ~a\n"
+                    (date->string (seconds->date start-seconds) #t))
 	   (write-string v o)
 	   (newline o)))))
 
@@ -733,6 +747,7 @@
                       #:success-log [success-log #f]
                       . args)
     (apply ssh rt
+           #:show-header show-pkg-build-log-header
            #:show-time? #t
            #:mode mode
            #:failure-log failure-log
@@ -958,7 +973,8 @@
        (define rt (vm-remote vm config machine-independent?))
        (make-sure-vm-is-ready vm rt)
        (define test-ok?
-         (ssh #:show-time? #t
+         (ssh #:show-header show-pkg-build-log-header
+              #:show-time? #t
               rt (cd-racket vm)
               " && bin/racket" (MCR vm) " -l- raco pkg install" job-flags " -u --auto " pkgs-str
               " && bin/racket" (MCR vm) " -l- raco test" job-flags test-timeout-flags " --drdr --package " pkgs-str
@@ -1576,6 +1592,7 @@
                   #:pkg-catalogs pkg-catalogs
                   #:built-at-site? built-at-site?
                   #:site-starting-point site-starting-point
+                  #:one-time-build? one-time-build?
                   #:site-url site-url))
 
   ;; ----------------------------------------

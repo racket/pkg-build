@@ -25,8 +25,13 @@
      [else
       (define-values (p h) (get-pure-port/headers installer-url
                                                   #:method #"HEAD"
-                                                  #:redirections 5))
+                                                  #:redirections 5
+                                                  #:status? #t))
       (close-input-port p)
+      (unless (regexp-match? #rx"HTTP/[.0-9]* [2]" h)
+        (eprintf "~a\n" (url->string installer-url))
+        (eprintf "~a" h)
+        (error "download failed"))
       (extract-field "ETag" h)]))
   (cond
    [(and (file-exists? (build-path installer-dir installer-name))

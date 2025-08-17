@@ -17,7 +17,8 @@
                     #:pkg-catalogs [pkg-catalogs (list "https://pkgs.racket-lang.org/")]
                     #:built-at-site? [built-at-site? #f]
                     #:site-url [site-url #f]
-                    #:site-starting-point [given-starting-point #f])
+                    #:site-starting-point [given-starting-point #f]
+                    #:one-time-build? [one-time-build? #f])
   (define page-title "About Package Builds")
   (define starting-point
     (or given-starting-point
@@ -33,11 +34,18 @@
 
               @here{@h3[page-title]
 
-                    @p{For every package that is registered at
+                    @(if one-time-build?
+                         @p{For every package that is registered at
+@format-catalogs[pkg-catalogs], the package-build service
+starts with @starting-point and attempts to build each package.}
+                         @p{For every package that is registered at
 @format-catalogs[pkg-catalogs], the package-build service
 starts with @starting-point, periodically checks for package
 updates, and attempts to build each package that has changed or has a
-dependency that has changed.}
+dependency that has changed. The periodic build depends on catalog
+updates, but it runs less frequently than the package server itself
+updates information, so expect build updates on the order of an hour
+instead of minutes.})
 
                     @p{When a package installation succeeds,
 tests in the package are run with}

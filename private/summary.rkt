@@ -23,7 +23,8 @@
                       #:pkg-catalogs [pkg-catalogs (list "https://pkgs.racket-lang.org/")]
                       #:built-at-site? [built-at-site? #f]
                       #:site-url [site-url #f]
-                      #:site-starting-point [site-starting-point #f])
+                      #:site-starting-point [site-starting-point #f]
+                      #:one-time-build? [one-time-build? #f])
   (define site-name "pkg-build")
   (define page-site (site site-name
                           #:url (or site-url "https://pkg-build.racket-lang.org/")
@@ -40,6 +41,7 @@
   (define about-page (delay (make-about about-site
                                         #:pkg-catalogs pkg-catalogs
                                         #:site-starting-point site-starting-point
+                                        #:one-time-build? one-time-build?
                                         #:built-at-site? built-at-site?
                                         #:site-url site-url)))
 

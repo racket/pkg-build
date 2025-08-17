@@ -5,7 +5,7 @@
                "scribble-html-lib"
                "web-server-lib"
                "plt-web-lib"
-               ["remote-shell-lib" #:version "1.7"]))
+               ["remote-shell-lib" #:version "1.8"]))
 (define build-deps '("at-exp-lib"
                      "scribble-lib"
                      "racket-doc"))
