@@ -472,7 +472,8 @@ Recognizes a @tech{VM} crreated by @racket[docker-vm] or @racket[vbox-vm].}
           [#:memory-mb memory-mb (or/c #f exact-positive-integer?) #f]
           [#:swap-mb swap-mb (or/c #f exact-positive-integer?) #f]
           [#:minimal-variant minimal-variant (or/c #f vm?) #f]
-          [#:fallback-variant fallback-variant (or/c #f vm?) #f])
+          [#:fallback-variant fallback-variant (or/c #f vm?) #f]
+          [#:test-timeout test-timeout #f (or/c #f exact-nonnegative-integer?)])
          vm?]{
 
 Creates a @tech{VM} that specifies a Docker image and container. The
@@ -523,6 +524,9 @@ succeeds with it. Only one layer of fallback is supported, currently (i.e.,
 a @racket[minimal-variant] and @racket[fallback-variant] can specified when
 creating the @racket[fallback-variant] @tech{VM}, but they are unused).}
 
+The @racket[test-timeout] argument specifies a timeout to pass to @tt{raco test}
+when it is run in this VM. 
+}
 
 @defproc[(vbox-vm
           [#:name name string?]
@@ -536,7 +540,8 @@ creating the @racket[fallback-variant] @tech{VM}, but they are unused).}
           [#:init-shapshot init-snapshot string? "init"]
           [#:installed-shapshot installed-snapshot string? "installed"]
           [#:minimal-variant minimal-variant (or/c #f vm?) #f]
-          [#:fallback-variant fallback-variant (or/c #f vm?) #f])
+          [#:fallback-variant fallback-variant (or/c #f vm?) #f]
+          [#:test-timeout test-timeout #f (or/c #f exact-nonnegative-integer?)])
          vm?]{
 
 Creates a @tech{VM} that specifies a VirtualBox virtual machine with
@@ -577,8 +582,11 @@ are used as in @racket[docker-vm].}
 
 A helper to generate a @racket[#:steps] argument to @racket[build-pkgs]
 that has steps @racket[start] through @racket[end] inclusive. See
-@racket[build-pkgs] for the allowed step symbols.}
+@racket[build-pkgs] for the allowed step symbols.
 
+The @racket[test-timeout] argument specifies a timeout to pass to @tt{raco test}
+when it is run in this VM. 
+}
 
 @defthing[main-dist-bin-pkgs (listof string?)]{
 
