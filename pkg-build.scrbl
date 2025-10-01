@@ -456,7 +456,8 @@ Recognizes a @tech{VM} crreated by @racket[docker-vm] or @racket[vbox-vm].}
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:memory-mb memory-mb (or/c #f exact-positive-integer?) #f]
           [#:swap-mb swap-mb (or/c #f exact-positive-integer?) #f]
-          [#:minimal-variant minimal-variant (or/c #f vm?) #f])
+          [#:minimal-variant minimal-variant (or/c #f vm?) #f]
+          [#:test-timeout test-timeout #f (or/c #f exact-nonnegative-integer?)])
          vm?]{
 
 Creates a @tech{VM} that specifies a Docker image and container. The
@@ -493,7 +494,11 @@ The @racket[minimal-variant] argument, if not @racket[#f], specifies a
 @tech{VM} to try before this one. If installation fails with the
 @racket[minimal-variant] @tech{VM}, it is tried again with this one.
 Tests run in this @tech{VM}, however, instead of
-@racket[minimal-variant].}
+@racket[minimal-variant].
+
+The @racket[test-timeout] argument specifies a timeout to pass to @tt{raco test}
+when it is run in this VM. 
+}
 
 @defproc[(vbox-vm
           [#:name name string?]
@@ -505,7 +510,8 @@ Tests run in this @tech{VM}, however, instead of
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:init-shapshot init-snapshot string? "init"]
           [#:installed-shapshot installed-snapshot string? "installed"]
-          [#:minimal-variant minimal-variant (or/c #f vm?) #f])
+          [#:minimal-variant minimal-variant (or/c #f vm?) #f]
+          [#:test-timeout test-timeout #f (or/c #f exact-nonnegative-integer?)])
          vm?]{
 
 Creates a @tech{VM} that specifies a VirtualBox virtual machine with
@@ -546,4 +552,8 @@ Tests run in this @tech{VM}, however, instead of
 
 A helper to generate a @racket[#:steps] argument to @racket[build-pkgs]
 that has steps @racket[start] through @racket[end] inclusive. See
-@racket[build-pkgs] for the allowed step symbols.}
+@racket[build-pkgs] for the allowed step symbols.
+
+The @racket[test-timeout] argument specifies a timeout to pass to @tt{raco test}
+when it is run in this VM. 
+}
