@@ -25,7 +25,8 @@
                          #:init-shapshot string?
                          #:installed-shapshot string?
                          #:minimal-variant (or/c #f vm?)
-                         #:fallback-variant (or/c #f vm?))
+                         #:fallback-variant (or/c #f vm?)
+                         #:test-timeout [or/c #f exact-nonnegative-integer?])
                         vm?)]
           [docker-vm (->* (#:name string? #:from-image string?)
                           (#:dir (and/c string? complete-as-unix-path?)
@@ -33,6 +34,7 @@
                            #:shell (listof string?)
                            #:minimal-variant (or/c #f vm?)
                            #:fallback-variant (or/c #f vm?)
+                           #:test-timeout [or/c #f exact-nonnegative-integer?]
                            #:memory-mb (or/c #f exact-nonnegative-integer?)
                            #:swap-mb (or/c #f exact-nonnegative-integer?)
                            #:platform (or/c #f string?))
@@ -48,7 +50,7 @@
          vm-start
          vm-stop)
 
-(struct vm (name host user dir env shell minimal-variant fallback-variant))
+(struct vm (name host user dir env shell minimal-variant fallback-variant timeout))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
 (struct vm-docker vm (from-image memory-mb swap-mb platform))
 
@@ -89,11 +91,13 @@
          ;; If not #f, a `vm` (perhaps for a different architecture) that
          ;; will be tried if this one fails (with no recur):
          #:fallback-variant [fallback-variant #f]
+         ;; used with `raco test`, timeout in seconds
+         #:test-timeout [test-timeout #f]
          ;; Limit on "real" memory available to the container in megabytes:
          ;; Path to ssh key to use to connect to this VM:
          ;; #f indicates that ssh's defaults are used
          #:ssh-key [ssh-key #f])
-  (vm-vbox name host user dir env shell minimal-variant fallback-variant
+  (vm-vbox name host user dir env shell minimal-variant fallback-variant test-timeout
            init-snapshot installed-snapshot ssh-key))
 
 ;; Suggsted base Docker image names, available from Docker Hub:
@@ -124,6 +128,8 @@
          ;; If not #f, a `vm` (perhaps for a different architecture) that
          ;; will be tried if this one fails (with no recur):
          #:fallback-variant [fallback-variant #f]
+         ;; used with `raco test`, timeout in seconds
+         #:test-timeout [test-timeout #f]
          ;; Limit on "real" memory available to the container in megabytes:
          #:memory-mb [memory-mb  #f]
          ;; Amount of additional swap space available, defaults to `memory-mb`:
@@ -135,7 +141,7 @@
          ;; "racket/pkg-build:deps-x86_64" and "racket/pkg-build:deps-aarch_64" instead
          ;; of the tags without an architecture
          #:platform [platform #f])
-  (vm-docker name name "" dir env shell minimal-variant fallback-variant
+  (vm-docker name name "" dir env shell minimal-variant fallback-variant test-timeout
              from-image
              memory-mb swap-mb
              platform))
