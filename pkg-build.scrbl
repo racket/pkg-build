@@ -185,7 +185,11 @@ inputs:
                    @item{@filepath{test-success/@italic{P}.txt}
                          or @filepath{test-fail/@italic{P}.txt} --- records @exec{raco test} result}
 
-                   @item{possibly @filepath{min-fail/@italic{P}.txt} --- records failure on minimal-host attempt}
+                   @item{possibly @filepath{min-fail/@italic{P}.txt} --- records failure on minimal-host attempt
+                         prior to trying a non-minimal host (and fallback host, potentially)}
+
+                   @item{possibly @filepath{arch-fail/@italic{P}.txt} --- records failure on non-fallback-host attempt
+                         prior to trying a fallback host}
 
                  ]}
 
@@ -223,6 +227,7 @@ inputs:
            @item{@racket['test-success-log] --- @racket[#f] or relative path}
            @item{@racket['test-failure-log] --- @racket[#f] or relative path}
            @item{@racket['min-failure-log] --- @racket[#f] or relative path}
+           @item{@racket['arch-failure-log] --- @racket[#f] or relative path}
            @item{@racket['docs] --- a list of elements, each one of
                  @itemlist[
                    @item{@racket[(list 'docs/none _name)]}
@@ -260,6 +265,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:snapshot-url snapshot-url string?]
           [#:installer-name installer-name (or/c string? #f) #f]
           [#:installer-platform-name installer-platform-name (or/c string? #f) #f]
+          [#:fallback-installer-name fallback-installer-name (or/c string? #f) #f]
+          [#:fallback-installer-platform-name fallback-installer-platform-name (or/c string? #f) #f]
           [#:vms vms (listof vm?)]
           [#:pkg-catalogs pkg-catalogs (listof string?) (list "https://pkgs.racket-lang.org/")]
 
@@ -290,7 +297,7 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:site-starting-point site-starting-point (or/c #f string?) #f]
           [#:compress-site? compress-site? any/c #t]
 
-          [#:summary-omit-pkgs summary-omit-pkgs (listof string?) null]
+          [#:summary-omit-pkgs summary-omit-pkgs (listof string?) main-dist-bin-pkgs]
 
           [#:max-build-together max-build-together exact-positive-integer? 1]
 
@@ -316,6 +323,11 @@ Builds packages by
        the @tech{VMs} specified by @racket[vms];
        if a minimal installer is used and package tests will be run, include
        @racket["compiler-lib"] in @racket[extra-packages];}
+
+@item{providing either @racket[fallback-installer-name] or
+       @racket[fallback-installer-platform-name] (exactly one of them must be supplied as non-@racket[#f])
+       of any @tech{VMs} in @racket[vms] indicate a fallback VM, which is typically for trying
+       a different architecture;}
 
  @item{running the @tech{VMs} machines specified by @racket[vms], which is
        a list of results from @racket[docker-vm] and/or
@@ -451,12 +463,14 @@ Recognizes a @tech{VM} crreated by @racket[docker-vm] or @racket[vbox-vm].}
 @defproc[(docker-vm
           [#:name name string?]
           [#:from-image from-image string?]
+          [#:platform platform (or/c #f string?) #f]
           [#:dir dir string? "/home/root/"]
           [#:env env (listof (cons/c string? string?)) null]
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:memory-mb memory-mb (or/c #f exact-positive-integer?) #f]
           [#:swap-mb swap-mb (or/c #f exact-positive-integer?) #f]
-          [#:minimal-variant minimal-variant (or/c #f vm?) #f])
+          [#:minimal-variant minimal-variant (or/c #f vm?) #f]
+          [#:fallback-variant fallback-variant (or/c #f vm?) #f])
          vm?]{
 
 Creates a @tech{VM} that specifies a Docker image and container. The
@@ -468,7 +482,9 @@ and/or @racket["racket/pkg-build:pkg-build-deps-min"] is suitable as
 @racket[from-image].} The given @racket[name] is also used for a
 container that is an instance of the image; the container is created
 fresh (replacing any existing @racket[name] container) for each
-package to build.
+package to build. If @racket[platform] is a string, then the created
+container uses that platform (which is useful when @racket[from-image]
+is available for multiple platforms and the host can run multiple platforms).
 
 The @racket[dir] argument specifies a working directory within the
 Docker container; it must be a @racket[complete-path?], when viewed
@@ -477,7 +493,8 @@ as a unix path, i.e.,
 must return @racket[#t].
 
 The @racket[env] argument specifies environment variable settings that
-prefix every command.
+prefix every command. These environment variables are added after
+defaults that @racket[build-pkgs] uses, so they can override defaults.
 
 The @racket[shell] argument determines the shell command that is used
 to run shell-command strings in the container.
@@ -490,10 +507,19 @@ used in place of a @racket[#f] for the other. If both are @racket[#f],
 no specific limit is imposed.
 
 The @racket[minimal-variant] argument, if not @racket[#f], specifies a
-@tech{VM} to try before this one. If installation fails with the
+@tech{VM} to try @emph{before} this one. If installation fails with the
 @racket[minimal-variant] @tech{VM}, it is tried again with this one.
 Tests run in this @tech{VM}, however, instead of
-@racket[minimal-variant].}
+@racket[minimal-variant].
+
+The @racket[fallback-variant] argument, if not @racket[#f], specifies a
+@tech{VM} to try @emph{after} this one. If installation fails with
+this one, it is tried again with the @racket[fallback-variant] @tech{VM}.
+Tests run in the @racket[fallback-variant] @tech{VM} if installation
+succeeds with it. Only one layer of fallback is supported, currently (i.e.,
+a @racket[minimal-variant] and @racket[fallback-variant] can specified when
+creating the @racket[fallback-variant] @tech{VM}, but they are unused).}
+
 
 @defproc[(vbox-vm
           [#:name name string?]
@@ -505,7 +531,8 @@ Tests run in this @tech{VM}, however, instead of
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:init-shapshot init-snapshot string? "init"]
           [#:installed-shapshot installed-snapshot string? "installed"]
-          [#:minimal-variant minimal-variant (or/c #f vm?) #f])
+          [#:minimal-variant minimal-variant (or/c #f vm?) #f]
+          [#:fallback-variant fallback-variant (or/c #f vm?) #f])
          vm?]{
 
 Creates a @tech{VM} that specifies a VirtualBox virtual machine with
@@ -521,7 +548,8 @@ within the virtual machine, with the same checks as
 @racket[docker-vm]'s @racket[_dir] argument.
 
 The @racket[env] argument specifies environment variable settings that
-prefix every command.
+prefix every command. These environment variables are added after
+defaults that @racket[build-pkgs] uses, so they can override defaults.
 
 The @racket[shell] argument determines the shell command that is used
 to run shell-command strings in the virtual machine.
@@ -536,14 +564,18 @@ created by @racket[build-pkgs] after it installs Racket in the virtual
 machine. If a snapshot using this name already exists, it may be
 replaced.
 
-The @racket[minimal-variant] argument, if not @racket[#f], specifies a
-@tech{VM} to try before this one. If installation fails with the
-@racket[minimal-variant] @tech{VM}, it is tried again with this one.
-Tests run in this @tech{VM}, however, instead of
-@racket[minimal-variant].}
+The @racket[minimal-variant] and @racket[minimal-variant] arguments
+are used as in @racket[docker-vm].}
+
 
 @defproc[(steps-in [start symbol?] [end symbol?]) (listof symbol?)]{
 
 A helper to generate a @racket[#:steps] argument to @racket[build-pkgs]
 that has steps @racket[start] through @racket[end] inclusive. See
 @racket[build-pkgs] for the allowed step symbols.}
+
+
+@defthing[main-dist-bin-pkgs (listof string?)]{
+
+A list of packages that provide to pre-built native libraries for
+various platforms as used by the main Racket distribution.}
