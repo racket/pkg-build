@@ -44,7 +44,7 @@
    
    #:steps (steps-in 'download 'site)))
 
-;; Set to #f to disable the memory limit on cnotainers; if not #f,
+;; Set to #f to disable the memory limit on containers; if not #f,
 ;; twice as much memory will be available counting swap:
 (define memory-mb 1024)
 
@@ -53,7 +53,6 @@
   (docker-vm
    #:name name
    #:from-image (~a "racket/pkg-build:deps-" (system-type 'arch))
-   #:env test-env
    #:shell xvfb-shell
    #:memory-mb memory-mb
    #:minimal-variant (docker-vm #:name (string-append name "-min")
@@ -65,15 +64,9 @@
                                       #:platform (case fallback-arch
                                                    [(x86_64) "linux/amd64"]
                                                    [else "unknown fallabck platform"])
-                                      #:env test-env
                                       #:shell xvfb-shell
                                       #:memory-mb memory-mb))))
 
-;; Some packages may depend on this, since pkg-build.racket-lang.org
-;; defines it:
-(define test-env
-  (list (cons "PLT_PKG_BUILD_SERVICE" "1")))
-
 ;; Use `xvfb-run` on the non-minimal VM to allow GUI programs to work:
 (define xvfb-shell
-  '("/usr/bin/xvfb-run" "-n" "1" "/bin/sh" "-c"))
+  '("/usr/bin/xvfb-run" "--auto-servernum" "/bin/sh" "-c"))
