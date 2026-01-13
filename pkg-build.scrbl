@@ -1,5 +1,6 @@
 #lang scribble/manual
 @(require (for-label racket/base
+                     racket/contract/base
                      pkg-build))
 
 @title{Pkg-Build: Building and Testing All Racket Packages}
@@ -466,6 +467,7 @@ Recognizes a @tech{VM} crreated by @racket[docker-vm] or @racket[vbox-vm].}
           [#:platform platform (or/c #f string?) #f]
           [#:dir dir string? "/home/root/"]
           [#:env env (listof (cons/c string? string?)) null]
+          [#:test-env test-env (listof (cons/c string? string?)) env]
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:memory-mb memory-mb (or/c #f exact-positive-integer?) #f]
           [#:swap-mb swap-mb (or/c #f exact-positive-integer?) #f]
@@ -493,7 +495,8 @@ as a unix path, i.e.,
 must return @racket[#t].
 
 The @racket[env] argument specifies environment variable settings that
-prefix every command. These environment variables are added after
+prefix every command, except that @racket[test-env] (which defaults to
+@racket[env]) prefixes testing steps. These environment variables are added after
 defaults that @racket[build-pkgs] uses, so they can override defaults.
 
 The @racket[shell] argument determines the shell command that is used
@@ -528,6 +531,7 @@ creating the @racket[fallback-variant] @tech{VM}, but they are unused).}
           [#:ssh-key ssh-key (or/c #f path-string?) #f]
           [#:dir dir string? "/home/racket/build-pkgs"]
           [#:env env (listof (cons/c string? string?)) null]
+          [#:test-env test-env (listof (cons/c string? string?)) env]
           [#:shell shell (listof string?) '("/bin/sh" "-c")]
           [#:init-shapshot init-snapshot string? "init"]
           [#:installed-shapshot installed-snapshot string? "installed"]
@@ -548,7 +552,8 @@ within the virtual machine, with the same checks as
 @racket[docker-vm]'s @racket[_dir] argument.
 
 The @racket[env] argument specifies environment variable settings that
-prefix every command. These environment variables are added after
+prefix every command, except that @racket[test-env] (which defaults to
+@racket[env]) prefixes testing steps. These environment variables are added after
 defaults that @racket[build-pkgs] uses, so they can override defaults.
 
 The @racket[shell] argument determines the shell command that is used

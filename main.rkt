@@ -970,7 +970,7 @@
     (dynamic-wind
      (lambda () (vm-start vm #:max-vms (length vms)))
      (lambda ()
-       (define rt (vm-remote vm config machine-independent?))
+       (define rt (vm-remote vm config machine-independent? #:test? #t))
        (make-sure-vm-is-ready vm rt)
        (define test-ok?
          (ssh #:show-header show-pkg-build-log-header

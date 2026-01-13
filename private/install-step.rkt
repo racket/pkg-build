@@ -147,6 +147,10 @@
            (build-path build-dir "Dockerfile")
            (lambda (o)
              (fprintf o "FROM ~a\n" (vm-docker-from-image vm))
+             ;; Don't install environment variables permanently.
+             ;; Instead, we prefix commands with `/usr/bin/env`,
+             ;; which allows testing commands to be different.
+             #;
              (for ([p (in-list (vm-env vm))])
                (fprintf o "ENV ~a ~a\n" (car p) (cdr p)))
              (define (build-ssh rt . strs)

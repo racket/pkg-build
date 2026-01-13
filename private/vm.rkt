@@ -21,6 +21,7 @@
                          #:ssh-key (or/c #f path-string?)
                          #:dir (and/c string? complete-as-unix-path?)
                          #:env (listof (cons/c string? string?))
+                         #:test-env (listof (cons/c string? string?))
                          #:shell (listof string?)
                          #:init-shapshot string?
                          #:installed-shapshot string?
@@ -30,6 +31,7 @@
           [docker-vm (->* (#:name string? #:from-image string?)
                           (#:dir (and/c string? complete-as-unix-path?)
                            #:env (listof (cons/c string? string?))
+                           #:test-env (listof (cons/c string? string?))
                            #:shell (listof string?)
                            #:minimal-variant (or/c #f vm?)
                            #:fallback-variant (or/c #f vm?)
@@ -48,7 +50,7 @@
          vm-start
          vm-stop)
 
-(struct vm (name host user dir env shell minimal-variant fallback-variant))
+(struct vm (name host user dir env test-env shell minimal-variant fallback-variant))
 (struct vm-vbox vm (init-snapshot installed-snapshot ssh-key))
 (struct vm-docker vm (from-image memory-mb swap-mb platform))
 
@@ -74,6 +76,8 @@
          #:dir [dir "/home/racket/build-pkgs"]
          ;; Environment variables as (list (cons <str> <str>) ...)
          #:env [env null]
+         ;; Environment variables used for test mode
+         #:test-env [test-env env]
          ;; Command to run a single-stringa shell command
          #:shell [shell '("/bin/sh" "-c")]
          ;; Name of a clean starting snapshot in the VM:
@@ -93,7 +97,7 @@
          ;; Path to ssh key to use to connect to this VM:
          ;; #f indicates that ssh's defaults are used
          #:ssh-key [ssh-key #f])
-  (vm-vbox name host user dir env shell minimal-variant fallback-variant
+  (vm-vbox name host user dir env test-env shell minimal-variant fallback-variant
            init-snapshot installed-snapshot ssh-key))
 
 ;; Suggsted base Docker image names, available from Docker Hub:
@@ -114,6 +118,8 @@
          #:dir [dir "/home/root/"]
          ;; Environment variables as (list (cons <str> <str>) ...)
          #:env [env null]
+         ;; Environment variables used for test mode
+         #:test-env [test-env env]
          ;; Command to run a single-stringa shell command
          #:shell [shell '("/bin/sh" "-c")]
          ;; If not #f, a `vm` that is more constrained and will be
@@ -135,7 +141,7 @@
          ;; "racket/pkg-build:deps-x86_64" and "racket/pkg-build:deps-aarch_64" instead
          ;; of the tags without an architecture
          #:platform [platform #f])
-  (vm-docker name name "" dir env shell minimal-variant fallback-variant
+  (vm-docker name name "" dir env test-env shell minimal-variant fallback-variant
              from-image
              memory-mb swap-mb
              platform))
@@ -192,7 +198,8 @@
      (vm-vbox-installed-snapshot vm)]
     [(vm-docker? vm) null]))
 
-(define (vm-remote vm config machine-independent?)
+(define (vm-remote vm config machine-independent? #:test? [test? #f])
+  (define env (if test? (vm-test-env vm) (vm-env vm)))
   (remote #:host (vm-host vm)
           #:kind (if (vm-docker? vm)
                      'docker
@@ -205,14 +212,14 @@
                        (cons "CI" "true")
                        (cons "PLT_INFO_ALLOW_VARS"
                              (string-append
-                              (let ([a (assoc "PLT_INFO_ALLOW_VARS" (vm-env vm))])
+                              (let ([a (assoc "PLT_INFO_ALLOW_VARS" env)])
                                 (if a (cdr a) ""))
                               ";PLT_PKG_BUILD_SERVICE")))
                  (if machine-independent?
                      (list
                       (cons "PLTCOMPILEDROOTS" (string-append (vm-dir vm) "/zo:")))
                      null)
-                 (vm-env vm))
+                 env)
           #:shell (vm-shell vm)
           #:key (and (vm-vbox? vm)
                      (vm-vbox-ssh-key vm))
