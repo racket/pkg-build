@@ -188,7 +188,7 @@
          #:timeout [timeout 600]
 
          ;; If not #f, determines a `--timeout` argument to `raco test`:
-         #:test-timeout [test-timeout #f]
+         #:test-timeout [build-pkgs-test-timeout #f]
 
          ;; If not #f, determines the `--jobs` argument to `raco setup`,
          ;; `raco pkg install`, and/or `raco test`:
@@ -278,14 +278,19 @@
                        (format " --jobs ~a" jobs)]
                       [else ""]))
 
-  (define test-timeout-flags (cond
-                               [test-timeout
-                                (unless (real? test-timeout)
-                                  (raise-argument-error 'build-pkgs
-                                                        "(or/c real? #f)"
-                                                        test-timeout))
-                                (format " --timeout ~a" test-timeout)]
-                               [else ""]))
+  
+  (unless (or (not build-pkgs-test-timeout) (real? build-pkgs-test-timeout))
+    (raise-argument-error 'build-pkgs
+                          "(or/c real? #f)"
+                          build-pkgs-test-timeout))
+  (define (test-timeout-flags vm)
+    (define test-timeout
+      (or (vm-timeout vm)
+          build-pkgs-test-timeout))
+    (cond
+      [test-timeout
+       (format " --timeout ~a" test-timeout)]
+      [else ""]))
 
   (define rx:txt #rx"[.]txt$")
   (define (txt? f)
@@ -977,7 +982,7 @@
               #:show-time? #t
               rt (cd-racket vm)
               " && bin/racket" (MCR vm) " -l- raco pkg install" job-flags " -u --auto " pkgs-str
-              " && bin/racket" (MCR vm) " -l- raco test" job-flags test-timeout-flags " --drdr --package " pkgs-str
+              " && bin/racket" (MCR vm) " -l- raco test" job-flags (test-timeout-flags vm) " --drdr --package " pkgs-str
               #:mode 'result
               #:success-log test-success-dest
               #:failure-log test-failure-dest))
