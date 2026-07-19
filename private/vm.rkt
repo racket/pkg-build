@@ -46,6 +46,7 @@
          mcr
          make-sure-vm-is-ready
 
+         vm-platform-match?
          vm-config-key
          vm-remote
          vm-reset
@@ -196,6 +197,20 @@
                                     (date->string (seconds->date (current-seconds)) #t))))))
 
 ;; ----------------------------------------
+
+(define (vm-platform-match? vm platforms)
+  (or (not platforms)
+      (not (list? platforms))
+      (not (vm-docker? vm))
+      (not (vm-docker-platform vm))
+      (let ([types
+             (case (vm-docker-platform vm)
+               [("linux/amd64") '("unix" "linux" "x86_64" "linux-x86_64")]
+               [("linux/arm64" "linux/arm64/v8") '("unix" "linux" "aarch64" "linux-aarch64")]
+               [else '()])])
+        (for/or ([platform (in-list platforms)])
+          (for/or ([type (in-list types)])
+            (equal? platform type))))))
 
 ;; Used to detect changes that trigger rebuilding the installed state:
 (define (vm-config-key vm)

@@ -142,6 +142,11 @@
          ;; expressed as (cons <sym> <subpath>)
          #:only-sys+subpath [only-platform #f]
 
+         ;; Hash table from package names to lists of strings, suppling
+         ;; overrides for each package's declared `build-platforms` in
+         ;; its "info.rkt"
+         #:pkg-build-platforms [pkg-build-platforms-override #hash()]
+
          ;; If not #f, bytecode is compiled as machine-independent
          ;; in built packages; this needs to be consistent with the
          ;; selected installers:
@@ -519,6 +524,8 @@
   (define (pkg-author pkg) (hash-ref (hash-ref pkg-details pkg) 'author ""))
   (define (pkg-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".orig-CHECKSUM")))
   (define (pkg-ring pkg) (or (hash-ref (hash-ref pkg-details pkg) 'ring #f) 0))
+  (define (pkg-build-platforms pkg) (or (hash-ref pkg-build-platforms-override pkg #f)
+                                        (hash-ref (hash-ref pkg-details pkg) 'build-platforms #f)))
   (define (pkg-zip-file pkg) (build-path built-pkgs-dir (~a pkg ".zip")))
   (define (pkg-zip-checksum-file pkg) (build-path built-pkgs-dir (~a pkg ".zip.CHECKSUM")))
   (define (pkg-failure-dest pkg #:minimal? [min? #f] #:has-fallback? [has-fallback? #f])
@@ -1019,10 +1026,18 @@
       (define len (length pkgs))
       (define has-minimal? (and (vm-minimal-variant vm) #t))
       (define has-fallback? (and (vm-fallback-variant vm) #t))
+      (define use-fallback? (and has-fallback?
+                                 ;; some package doesn't work on `vm`?
+                                 (for/or ([pkg (in-list (flatten pkgs))])
+                                   (not (vm-platform-match? vm (pkg-build-platforms pkg))))
+                                 ;; all packages work on fallback?
+                                 (for/and ([pkg (in-list (flatten pkgs))])
+                                   (vm-platform-match? (vm-fallback-variant vm) (pkg-build-platforms pkg)))))
       (define ok (and (len . <= . max-build-together)
                       (or
                        ;; Here's the main build attempt:
-                       (and (build-pkgs (if has-minimal?
+                       (and (not use-fallback?)
+                            (build-pkgs (if has-minimal?
                                             (vm-minimal-variant vm)
                                             vm)
                                         pkgs
@@ -1032,7 +1047,8 @@
                             (if has-minimal? 'minmal 'arch))
                        ;; ... but if that was minimal, try again
                        ;; with the non-minimal variant:
-                       (and has-minimal?
+                       (and (not use-fallback?)
+                            has-minimal?
                             (build-pkgs vm pkgs start-pct
                                         #:minimal? #f
                                         #:has-fallback? has-fallback?)

@@ -277,6 +277,8 @@ on a set of @deftech{VMs} that are created by @racket[docker-vm] or
           [#:only-packages only-packages (or/c #f (listof string?)) #f]
           [#:only-sys+subpath only-sys+subpath (or/c #f (cons string? string?)) null]
 
+          [#:pkg-build-platforms pkg-build-platforms (hash/c string? (listof string?)) #hash()]
+
           [#:compile-any? compile-any? any/c #f]
 
           [#:steps steps (listof symbol?) (steps-in 'download 'summary)]
@@ -364,6 +366,14 @@ Additional configuration options:
        by @racket[cons]ing a symbol matching the result of
        @racket[(system-type)] to a string matching the result of
        @racket[(system-library-subpath #f)].}
+
+ @item{@racket[pkg-build-platforms] --- Provides a mapping from
+       package names to list of platforms for the package, where the
+       platform list overrides any @racket[build-platforms]
+       specification in the package's @filepath{info.rkt}. A package
+       that is not in the mapping retains its @filepath{info.rkt}
+       specification. Platform specifications may be used to select
+       a fallback @tech{VM} as described in @racket[docker-vm].}
 
  @item{@racket[compile-any?] --- When not @racket[#f],
        compiles bytecode in built packages to machine-independent
@@ -519,6 +529,9 @@ Tests run in this @tech{VM}, however, instead of
 The @racket[fallback-variant] argument, if not @racket[#f], specifies a
 @tech{VM} to try @emph{after} this one. If installation fails with
 this one, it is tried again with the @racket[fallback-variant] @tech{VM}.
+Alternatively, if this one specifies a @racket[platform] that does not
+match for a package, and if the fallback specifies a @racket[platform]
+that does match for the package, then only fallback @tech{VM} is used.
 Tests run in the @racket[fallback-variant] @tech{VM} if installation
 succeeds with it. Only one layer of fallback is supported, currently (i.e.,
 a @racket[minimal-variant] and @racket[fallback-variant] can specified when
